@@ -1,5 +1,3 @@
-@file:OptIn(androidx.compose.material3.ExperimentalMaterial3Api::class)
-
 package com.samohammer.app
 
 import android.os.Bundle
@@ -12,8 +10,6 @@ import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.itemsIndexed
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.*
-import androidx.compose.material3.ExposedDropdownMenuBox
-import androidx.compose.material3.ExposedDropdownMenu
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -105,7 +101,7 @@ private fun pGate(needed: Int): Double = when {
 }
 private fun pCritHit(critOn: Int?, needed: Int): Double {
     if (critOn == null) return 0.0
-    val gate = max(critOn, needed)
+    val gate = max(critOn, needed) // un crit doit déjà être un hit
     return pGate(gate)
 }
 private fun pHit(needed: Int): Double = pGate(needed)
@@ -153,7 +149,7 @@ private fun expectedDamageForProfile(
 }
 private fun expectedDamageAll(units: List<UnitEntry>, target: TargetConfig, baseSave: Int?): Double {
     var sum = 0.0
-    for (u in units) if (u.active) for (p in u.profiles) sum += expectedDamageForProfile(p, target, baseSave)
+    for (u in units) if (!u.active) continue else for (p in u.profiles) sum += expectedDamageForProfile(p, target, baseSave)
     return sum
 }
 
@@ -309,43 +305,44 @@ fun ProfileCard(profile: AttackProfile, onChange: (AttackProfile) -> Unit, onRem
 
             Column(Modifier.fillMaxWidth().background(bodyTint).padding(12.dp)) {
                 if (profile.expanded) {
-                    Row(horizontalArrangement = Arrangement.spacedBy(8.dp), modifier = Modifier.fillMaxWidth()) {
-                        OutlinedTextField(
-                            value = profile.name,
-                            onValueChange = { onChange(profile.copy(name = it)) },
-                            label = { Text("Nom du profil (ex: Hallebarde)") },
-                            modifier = Modifier.weight(1f)
+                    // Nom du profil
+                    OutlinedTextField(
+                        value = profile.name,
+                        onValueChange = { onChange(profile.copy(name = it)) },
+                        label = { Text("Nom du profil (ex: Hallebarde)") },
+                        modifier = Modifier.fillMaxWidth()
+                    )
+                    Spacer(Modifier.height(8.dp))
+
+                    // Sélecteur de type (sans API expérimentale)
+                    Row(verticalAlignment = Alignment.CenterVertically) {
+                        Text("Type : ")
+                        Spacer(Modifier.width(8.dp))
+                        FilterChip(
+                            selected = profile.attackType == AttackType.MELEE,
+                            onClick = { onChange(profile.copy(attackType = AttackType.MELEE)) },
+                            label = { Text("MELEE") }
                         )
-                        var ddOpen by remember { mutableStateOf(false) }
-                        ExposedDropdownMenuBox(expanded = ddOpen, onExpandedChange = { ddOpen = !ddOpen }) {
-                            OutlinedTextField(
-                                value = if (profile.attackType == AttackType.MELEE) "MELEE" else "SHOOT",
-                                onValueChange = {},
-                                readOnly = true,
-                                label = { Text("Type") },
-                                modifier = Modifier.menuAnchor().width(140.dp)
-                            )
-                            ExposedDropdownMenu(expanded = ddOpen, onDismissRequest = { ddOpen = false }) {
-                                DropdownMenuItem(text = { Text("MELEE") }, onClick = {
-                                    onChange(profile.copy(attackType = AttackType.MELEE)); ddOpen = false
-                                })
-                                DropdownMenuItem(text = { Text("SHOOT") }, onClick = {
-                                    onChange(profile.copy(attackType = AttackType.SHOOT)); ddOpen = false
-                                })
-                            }
-                        }
+                        Spacer(Modifier.width(8.dp))
+                        FilterChip(
+                            selected = profile.attackType == AttackType.SHOOT,
+                            onClick = { onChange(profile.copy(attackType = AttackType.SHOOT)) },
+                            label = { Text("SHOOT") }
+                        )
                     }
                     Spacer(Modifier.height(8.dp))
 
+                    // Models
                     OutlinedTextField(
                         value = profile.models.toString(),
                         onValueChange = { if (isValidPositiveIntOrZero(it)) onChange(profile.copy(models = it.toInt())) },
                         label = { Text("Models (nb figurines)") },
                         keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
-                        modifier = Modifier.width(180.dp)
+                        modifier = Modifier.width(200.dp)
                     )
                     Spacer(Modifier.height(8.dp))
 
+                    // Attacks / Rend
                     Row(horizontalArrangement = Arrangement.spacedBy(8.dp), modifier = Modifier.fillMaxWidth()) {
                         OutlinedTextField(
                             value = profile.attacks,
@@ -363,6 +360,7 @@ fun ProfileCard(profile: AttackProfile, onChange: (AttackProfile) -> Unit, onRem
                     }
                     Spacer(Modifier.height(8.dp))
 
+                    // To hit / To wound
                     Row(horizontalArrangement = Arrangement.spacedBy(8.dp), modifier = Modifier.fillMaxWidth()) {
                         OutlinedTextField(
                             value = profile.toHit.needed.toString(),
@@ -381,6 +379,7 @@ fun ProfileCard(profile: AttackProfile, onChange: (AttackProfile) -> Unit, onRem
                     }
                     Spacer(Modifier.height(8.dp))
 
+                    // Damage
                     OutlinedTextField(
                         value = profile.damage,
                         onValueChange = { s -> if (isValidDiceExprOrIntForDisplay(s)) onChange(profile.copy(damage = s)) },
@@ -389,6 +388,7 @@ fun ProfileCard(profile: AttackProfile, onChange: (AttackProfile) -> Unit, onRem
                     )
                     Spacer(Modifier.height(8.dp))
 
+                    // Critiques
                     Row(horizontalArrangement = Arrangement.spacedBy(8.dp), modifier = Modifier.fillMaxWidth()) {
                         CritField("Crit 2 hits", profile.crit2On) { onChange(profile.copy(crit2On = it)) }
                         CritField("Crit auto wound", profile.critAutoWoundOn) { onChange(profile.copy(critAutoWoundOn = it)) }
