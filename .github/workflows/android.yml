@@ -30,7 +30,6 @@ jobs:
           export ANDROID_SDK_ROOT=/usr/local/lib/android/sdk
           export PATH="$ANDROID_SDK_ROOT/cmdline-tools/latest/bin:$ANDROID_SDK_ROOT/platform-tools:$PATH"
           sdkmanager --version
-          # Le SIGPIPE sur 'yes' casse le job à cause de -o pipefail. On neutralise avec '|| true'.
           yes | sdkmanager --licenses || true
           sdkmanager "platforms;android-34" "build-tools;34.0.0" "platform-tools"
 
@@ -39,11 +38,13 @@ jobs:
         with:
           gradle-version: 8.7
 
-      - name: Generate Gradle wrapper
-        run: |
-          gradle wrapper --gradle-version 8.7
-          chmod +x ./gradlew
-          ./gradlew --version
+      - name: Cache Android build-cache
+        uses: actions/cache@v4
+        with:
+          path: ~/.android/build-cache
+          key: android-buildcache-${{ runner.os }}-${{ hashFiles('**/*.gradle*', '**/gradle.properties', '**/settings.gradle*') }}
+          restore-keys: |
+            android-buildcache-${{ runner.os }}-
 
       - name: Build Debug APK
         run: ./gradlew :app:assembleDebug --stacktrace
