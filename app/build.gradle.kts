@@ -33,7 +33,7 @@ android {
 }
 
 dependencies {
-    // BOM Compose (aligne les versions UI/Foundation/Material3)
+    // BOM Compose (aligne toutes les versions UI/Foundation/Material3)
     val composeBom = platform("androidx.compose:compose-bom:2024.06.00")
     implementation(composeBom)
     androidTestImplementation(composeBom)
@@ -42,9 +42,7 @@ dependencies {
     implementation("androidx.activity:activity-compose:1.9.0")
     implementation("androidx.compose.ui:ui")
     implementation("androidx.compose.material3:material3")
-
-    // ⚠️ Nécessaire pour `import androidx.compose.foundation.layout.padding`
-    implementation("androidx.compose.foundation:foundation-layout")
+    implementation("androidx.compose.foundation:foundation")
 
     // Outils / preview
     implementation("androidx.compose.ui:ui-tooling-preview")
