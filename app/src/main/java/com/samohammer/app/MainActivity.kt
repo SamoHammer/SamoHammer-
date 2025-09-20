@@ -38,15 +38,14 @@ data class AttackProfile(
     val name: String = "Profil",
     val attackType: AttackType = AttackType.MELEE,
     val models: Int = 1,
-    val attacks: String = "1",      // ex: "6", "3D6", "D3+3"
+    val attacks: String = "1",
     val toHit: ToGate = ToGate(4),
     val toWound: ToGate = ToGate(4),
-    val rend: Int = 0,              // rend positif -> dégrade la save
-    val damage: String = "1",       // ex: "2", "D3", "D6"
-    // Critiques (seuil naturel configurable, null = off)
-    val crit2On: Int? = null,         // Crit 2 hits sur X+
-    val critAutoWoundOn: Int? = null, // Crit auto wound sur X+
-    val critMortalOn: Int? = null,    // Crit mortal sur X+
+    val rend: Int = 0,
+    val damage: String = "1",
+    val crit2On: Int? = null,
+    val critAutoWoundOn: Int? = null,
+    val critMortalOn: Int? = null,
     val expanded: Boolean = true
 )
 
@@ -59,13 +58,13 @@ data class UnitEntry(
 
 data class TargetConfig(
     val wardEnabled: Boolean = false,
-    val wardNeeded: Int = 5,           // [2..6]
+    val wardNeeded: Int = 5,
     val debuffHitEnabled: Boolean = false,
-    val debuffHitValue: Int = 1        // 0..3
+    val debuffHitValue: Int = 1
 )
 
 // -------------------------
-// Helpers UI (contrôles)
+// Helpers
 // -------------------------
 private fun clampGate(x: Int) = x.coerceIn(2, 6)
 private fun isValidPositiveIntOrZero(s: String) = s.toIntOrNull()?.let { it >= 0 } == true
@@ -81,7 +80,7 @@ private fun isValidDiceExprOrIntForDisplay(s: String): Boolean {
 }
 
 // -------------------------
-// Moteur — parsing & proba
+// Moteur proba
 // -------------------------
 private fun expectedFromDice(expr: String): Double {
     val t = expr.trim().uppercase()
@@ -101,7 +100,7 @@ private fun pGate(needed: Int): Double = when {
 }
 private fun pCritHit(critOn: Int?, needed: Int): Double {
     if (critOn == null) return 0.0
-    val gate = max(critOn, needed) // un crit doit déjà être un hit
+    val gate = max(critOn, needed)
     return pGate(gate)
 }
 private fun pHit(needed: Int): Double = pGate(needed)
@@ -118,11 +117,7 @@ private fun wardFactor(target: TargetConfig): Double {
     val pWard = pGate(target.wardNeeded)
     return 1.0 - pWard
 }
-private fun expectedDamageForProfile(
-    profile: AttackProfile,
-    target: TargetConfig,
-    baseSave: Int?
-): Double {
+private fun expectedDamageForProfile(profile: AttackProfile, target: TargetConfig, baseSave: Int?): Double {
     val attacksEV = expectedFromDice(profile.attacks) * max(profile.models, 0)
     val dmgEV = expectedFromDice(profile.damage)
     val wardMul = wardFactor(target)
@@ -140,10 +135,10 @@ private fun expectedDamageForProfile(
     val pwound = pWound(profile.toWound.needed)
     val punsaved = pUnsaved(baseSave, profile.rend)
 
-    val mortalDamage = attacksEV * pMortalMain       * dmgEV * wardMul
-    val autoWoundDamage = attacksEV * pAutoMain      * punsaved * dmgEV * wardMul
+    val mortalDamage = attacksEV * pMortalMain * dmgEV * wardMul
+    val autoWoundDamage = attacksEV * pAutoMain * punsaved * dmgEV * wardMul
     val normalDamage = attacksEV * pNonCritMain * pwound * punsaved * dmgEV * wardMul
-    val extraDamage  = attacksEV * pExtraHit    * pwound * punsaved * dmgEV * wardMul
+    val extraDamage = attacksEV * pExtraHit * pwound * punsaved * dmgEV * wardMul
 
     return mortalDamage + autoWoundDamage + normalDamage + extraDamage
 }
@@ -154,7 +149,7 @@ private fun expectedDamageAll(units: List<UnitEntry>, target: TargetConfig, base
 }
 
 // -------------------------
-// App — 3 onglets
+// App
 // -------------------------
 @Composable
 fun SamoHammerApp() {
@@ -228,7 +223,8 @@ fun UnitCard(unit: UnitEntry, onChange: (UnitEntry) -> Unit, onRemove: () -> Uni
                 FilterChip(
                     selected = unit.active,
                     onClick = { onChange(unit.copy(active = !unit.active)) },
-                    label = { Text(if (unit.active) "Activée" else "Inactive") }
+                    label = { Text(if (unit.active) "Activée" else "Inactive") },
+                    colors = FilterChipDefaults.filterChipColors()
                 )
                 Spacer(Modifier.width(8.dp))
                 OutlinedButton(onClick = { onChange(unit.copy(expanded = !unit.expanded)) }) { Text(if (unit.expanded) "Réduire" else "Déplier") }
@@ -305,7 +301,6 @@ fun ProfileCard(profile: AttackProfile, onChange: (AttackProfile) -> Unit, onRem
 
             Column(Modifier.fillMaxWidth().background(bodyTint).padding(12.dp)) {
                 if (profile.expanded) {
-                    // Nom du profil
                     OutlinedTextField(
                         value = profile.name,
                         onValueChange = { onChange(profile.copy(name = it)) },
@@ -314,25 +309,25 @@ fun ProfileCard(profile: AttackProfile, onChange: (AttackProfile) -> Unit, onRem
                     )
                     Spacer(Modifier.height(8.dp))
 
-                    // Sélecteur de type (sans API expérimentale)
                     Row(verticalAlignment = Alignment.CenterVertically) {
                         Text("Type : ")
                         Spacer(Modifier.width(8.dp))
                         FilterChip(
                             selected = profile.attackType == AttackType.MELEE,
                             onClick = { onChange(profile.copy(attackType = AttackType.MELEE)) },
-                            label = { Text("MELEE") }
+                            label = { Text("MELEE") },
+                            colors = FilterChipDefaults.filterChipColors()
                         )
                         Spacer(Modifier.width(8.dp))
                         FilterChip(
                             selected = profile.attackType == AttackType.SHOOT,
                             onClick = { onChange(profile.copy(attackType = AttackType.SHOOT)) },
-                            label = { Text("SHOOT") }
+                            label = { Text("SHOOT") },
+                            colors = FilterChipDefaults.filterChipColors()
                         )
                     }
                     Spacer(Modifier.height(8.dp))
 
-                    // Models
                     OutlinedTextField(
                         value = profile.models.toString(),
                         onValueChange = { if (isValidPositiveIntOrZero(it)) onChange(profile.copy(models = it.toInt())) },
@@ -342,7 +337,6 @@ fun ProfileCard(profile: AttackProfile, onChange: (AttackProfile) -> Unit, onRem
                     )
                     Spacer(Modifier.height(8.dp))
 
-                    // Attacks / Rend
                     Row(horizontalArrangement = Arrangement.spacedBy(8.dp), modifier = Modifier.fillMaxWidth()) {
                         OutlinedTextField(
                             value = profile.attacks,
@@ -360,7 +354,6 @@ fun ProfileCard(profile: AttackProfile, onChange: (AttackProfile) -> Unit, onRem
                     }
                     Spacer(Modifier.height(8.dp))
 
-                    // To hit / To wound
                     Row(horizontalArrangement = Arrangement.spacedBy(8.dp), modifier = Modifier.fillMaxWidth()) {
                         OutlinedTextField(
                             value = profile.toHit.needed.toString(),
@@ -379,7 +372,6 @@ fun ProfileCard(profile: AttackProfile, onChange: (AttackProfile) -> Unit, onRem
                     }
                     Spacer(Modifier.height(8.dp))
 
-                    // Damage
                     OutlinedTextField(
                         value = profile.damage,
                         onValueChange = { s -> if (isValidDiceExprOrIntForDisplay(s)) onChange(profile.copy(damage = s)) },
@@ -388,7 +380,6 @@ fun ProfileCard(profile: AttackProfile, onChange: (AttackProfile) -> Unit, onRem
                     )
                     Spacer(Modifier.height(8.dp))
 
-                    // Critiques
                     Row(horizontalArrangement = Arrangement.spacedBy(8.dp), modifier = Modifier.fillMaxWidth()) {
                         CritField("Crit 2 hits", profile.crit2On) { onChange(profile.copy(crit2On = it)) }
                         CritField("Crit auto wound", profile.critAutoWoundOn) { onChange(profile.copy(critAutoWoundOn = it)) }
@@ -418,92 +409,3 @@ private fun CritField(label: String, value: Int?, onChange: (Int?) -> Unit) {
                 value = gate.toString(),
                 onValueChange = { s -> onChange(clampGate(asIntOr(gate, s, true))) },
                 label = { Text("Seuil (2..6)") },
-                keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
-                modifier = Modifier.width(140.dp)
-            )
-        }
-    }
-}
-
-// -------------------------
-// Onglet 2 — Target
-// -------------------------
-@Composable
-fun TargetTab(target: TargetConfig, onUpdate: (TargetConfig) -> Unit) {
-    Column(Modifier.fillMaxSize().padding(16.dp), verticalArrangement = Arrangement.spacedBy(16.dp)) {
-        Text("Cible (défenseur)", style = MaterialTheme.typography.titleLarge)
-
-        Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(12.dp)) {
-            Checkbox(checked = target.wardEnabled, onCheckedChange = { onUpdate(target.copy(wardEnabled = it)) })
-            Text("Ward")
-            if (target.wardEnabled) {
-                OutlinedTextField(
-                    value = target.wardNeeded.toString(),
-                    onValueChange = { s -> onUpdate(target.copy(wardNeeded = clampGate(asIntOr(target.wardNeeded, s, true)))) },
-                    label = { Text("Ward (2..6)") },
-                    keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
-                    modifier = Modifier.width(140.dp)
-                )
-            }
-        }
-
-        Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(12.dp)) {
-            Checkbox(checked = target.debuffHitEnabled, onCheckedChange = { onUpdate(target.copy(debuffHitEnabled = it)) })
-            Text("Debuff Hit (-Y)")
-            if (target.debuffHitEnabled) {
-                OutlinedTextField(
-                    value = target.debuffHitValue.toString(),
-                    onValueChange = { s ->
-                        val v = s.toIntOrNull()?.coerceIn(0, 3) ?: target.debuffHitValue
-                        onUpdate(target.copy(debuffHitValue = v))
-                    },
-                    label = { Text("Malus (0..3)") },
-                    keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
-                    modifier = Modifier.width(140.dp)
-                )
-            }
-        }
-
-        Divider()
-        Text("Ces réglages s’appliquent à la simulation (onglet 3).", style = MaterialTheme.typography.bodyMedium, color = Color.Gray)
-    }
-}
-
-// -------------------------
-// Onglet 3 — Simulations
-// -------------------------
-@Composable
-fun SimulationTab(units: List<UnitEntry>, target: TargetConfig) {
-    val rows = remember(units, target) {
-        val saves = listOf(2, 3, 4, 5, 6)
-        val data = mutableListOf<Pair<String, Double>>()
-        for (s in saves) data += "${s}+" to expectedDamageAll(units, target, s)
-        data += "—" to expectedDamageAll(units, target, null) // no save
-        data
-    }
-
-    Column(Modifier.fillMaxSize().padding(16.dp)) {
-        Text("Espérance de dégâts", style = MaterialTheme.typography.titleLarge)
-        Spacer(Modifier.height(8.dp))
-        SimulationTable(rows)
-    }
-}
-
-@Composable
-private fun SimulationTable(rows: List<Pair<String, Double>>) {
-    ElevatedCard(Modifier.fillMaxWidth()) {
-        Column(Modifier.fillMaxWidth().padding(12.dp)) {
-            Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
-                Text("Save", style = MaterialTheme.typography.titleMedium)
-                Text("Dégâts moyens", style = MaterialTheme.typography.titleMedium)
-            }
-            Divider(Modifier.padding(vertical = 8.dp))
-            rows.forEach { (label, value) ->
-                Row(Modifier.fillMaxWidth().padding(vertical = 6.dp), horizontalArrangement = Arrangement.SpaceBetween) {
-                    Text(label)
-                    Text(String.format("%.2f", value))
-                }
-            }
-        }
-    }
-}
