@@ -1,6 +1,7 @@
-// Top-level Gradle build file (racine)
-// Pour l’instant, pas de plugins ici : ils sont définis dans app/build.gradle.kts
+// Top-level Gradle build file
+// On déclare ici les versions des plugins, puis on les applique dans le module :app
 
 plugins {
-    // vide pour ce projet minimal
+    id("com.android.application") version "8.5.1" apply false
+    id("org.jetbrains.kotlin.android") version "1.9.24" apply false
 }
