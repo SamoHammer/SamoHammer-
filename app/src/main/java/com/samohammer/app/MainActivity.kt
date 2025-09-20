@@ -3,24 +3,15 @@ package com.samohammer.app
 import android.os.Bundle
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
+import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.fillMaxSize
-import androidx.compose.material3.CenterAlignedTopAppBar
-import androidx.compose.material3.ExperimentalMaterial3Api
-import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.Scaffold
-import androidx.compose.material3.Text
-import androidx.compose.material3.TopAppBarDefaults
-import androidx.compose.material3.NavigationBar
-import androidx.compose.material3.NavigationBarItem
-import androidx.compose.runtime.Composable
-import androidx.compose.runtime.getValue
-import androidx.compose.runtime.mutableStateOf
-import androidx.compose.runtime.remember
-import androidx.compose.runtime.setValue
+import androidx.compose.foundation.layout.padding
+import androidx.compose.material3.*
+import androidx.compose.runtime.*
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.tooling.preview.Preview
+import androidx.compose.ui.unit.dp
 
-@OptIn(ExperimentalMaterial3Api::class)
 class MainActivity : ComponentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
@@ -35,7 +26,7 @@ class MainActivity : ComponentActivity() {
 @Composable
 fun SamoHomeScreen() {
     var selectedTab by remember { mutableStateOf(0) }
-    val tabs = listOf("Screen 1", "Screen 2")
+    val tabs = listOf("Attaques", "Défenseur")
 
     Scaffold(
         topBar = {
@@ -57,21 +48,70 @@ fun SamoHomeScreen() {
             }
         }
     ) { inner ->
-        when (selectedTab) {
-            0 -> ScreenOne()
-            1 -> ScreenTwo()
+        Column(Modifier.padding(inner).fillMaxSize()) {
+            when (selectedTab) {
+                0 -> AttaquesScreen()
+                1 -> DefenseurScreen()
+            }
         }
     }
 }
 
 @Composable
-fun ScreenOne() {
-    Text("📊 Écran 1 - Probabilités")
+fun AttaquesScreen() {
+    var attaques by remember { mutableStateOf("") }
+    var touche by remember { mutableStateOf("") }
+    var blesse by remember { mutableStateOf("") }
+
+    Column(Modifier.padding(16.dp)) {
+        Text("⚔️ Attaques", style = MaterialTheme.typography.titleLarge)
+        OutlinedTextField(
+            value = attaques,
+            onValueChange = { attaques = it },
+            label = { Text("Nombre d’attaques") },
+            modifier = Modifier.padding(top = 8.dp)
+        )
+        OutlinedTextField(
+            value = touche,
+            onValueChange = { touche = it },
+            label = { Text("Jet pour toucher (ex: 3+)") },
+            modifier = Modifier.padding(top = 8.dp)
+        )
+        OutlinedTextField(
+            value = blesse,
+            onValueChange = { blesse = it },
+            label = { Text("Jet pour blesser (ex: 4+)") },
+            modifier = Modifier.padding(top = 8.dp)
+        )
+        Button(
+            onClick = { /* TODO: brancher moteur */ },
+            modifier = Modifier.padding(top = 16.dp)
+        ) {
+            Text("Calculer")
+        }
+    }
 }
 
 @Composable
-fun ScreenTwo() {
-    Text("⚙️ Écran 2 - Paramètres")
+fun DefenseurScreen() {
+    var sauvegarde by remember { mutableStateOf("") }
+    var rend by remember { mutableStateOf("") }
+
+    Column(Modifier.padding(16.dp)) {
+        Text("🛡️ Défenseur", style = MaterialTheme.typography.titleLarge)
+        OutlinedTextField(
+            value = sauvegarde,
+            onValueChange = { sauvegarde = it },
+            label = { Text("Jet de sauvegarde (ex: 5+)") },
+            modifier = Modifier.padding(top = 8.dp)
+        )
+        OutlinedTextField(
+            value = rend,
+            onValueChange = { rend = it },
+            label = { Text("Rend (ex: -1)") },
+            modifier = Modifier.padding(top = 8.dp)
+        )
+    }
 }
 
 @Preview(showBackground = true)
