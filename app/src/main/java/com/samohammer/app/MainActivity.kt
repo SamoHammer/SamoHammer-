@@ -1,3 +1,5 @@
+@file:OptIn(androidx.compose.material3.ExperimentalMaterial3Api::class)
+
 package com.samohammer.app
 
 import android.os.Bundle
@@ -10,6 +12,8 @@ import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.itemsIndexed
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.*
+import androidx.compose.material3.ExposedDropdownMenuBox
+import androidx.compose.material3.ExposedDropdownMenu
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -21,13 +25,10 @@ import androidx.compose.ui.text.input.KeyboardType
 import kotlin.math.max
 import kotlin.math.min
 
-@OptIn(ExperimentalMaterial3Api::class)
 class MainActivity : ComponentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
-        setContent {
-            MaterialTheme { SamoHammerApp() }
-        }
+        setContent { MaterialTheme { SamoHammerApp() } }
     }
 }
 
@@ -47,9 +48,9 @@ data class AttackProfile(
     val rend: Int = 0,              // rend positif -> dégrade la save
     val damage: String = "1",       // ex: "2", "D3", "D6"
     // Critiques (seuil naturel configurable, null = off)
-    val crit2On: Int? = null,       // Crit 2 hits sur X+ (le hit “critique” génère 1 hit supplémentaire)
-    val critAutoWoundOn: Int? = null, // Crit auto wound sur X+ (le hit “critique” blesse auto)
-    val critMortalOn: Int? = null,  // Crit mortal sur X+ (blesse auto et ignore la save ; ward s’applique)
+    val crit2On: Int? = null,         // Crit 2 hits sur X+
+    val critAutoWoundOn: Int? = null, // Crit auto wound sur X+
+    val critMortalOn: Int? = null,    // Crit mortal sur X+
     val expanded: Boolean = true
 )
 
@@ -86,15 +87,9 @@ private fun isValidDiceExprOrIntForDisplay(s: String): Boolean {
 // -------------------------
 // Moteur — parsing & proba
 // -------------------------
-
-// EV d’une expression de dés simple (ex: "6", "D3", "2D6", "3D6+2")
 private fun expectedFromDice(expr: String): Double {
     val t = expr.trim().uppercase()
-    // entier simple
     t.toIntOrNull()?.let { return it.toDouble() }
-
-    // motif xDy+z
-    // x facultatif, z facultatif, signes +/-
     val regex = Regex("""^\s*(\d+)?D(\d+)\s*([+\-]\s*\d+)?\s*$""")
     val m = regex.matchEntire(t) ?: return 0.0
     val n = (m.groups[1]?.value?.replace(" ", "")?.toIntOrNull() ?: 1).coerceAtLeast(1)
@@ -103,101 +98,62 @@ private fun expectedFromDice(expr: String): Double {
     val evOneDie = (1.0 + faces) / 2.0
     return n * evOneDie + shift
 }
-
-// proba (sur 1D6) de réussir un test “X+”
-private fun pGate(needed: Int): Double {
-    if (needed <= 1) return 1.0
-    if (needed >= 7) return 0.0
-    return (7 - needed) / 6.0
+private fun pGate(needed: Int): Double = when {
+    needed <= 1 -> 1.0
+    needed >= 7 -> 0.0
+    else -> (7 - needed) / 6.0
 }
-
-// proba qu’un jet naturel soit ≥ t et en même temps un hit (≥ needed)
 private fun pCritHit(critOn: Int?, needed: Int): Double {
     if (critOn == null) return 0.0
     val gate = max(critOn, needed)
     return pGate(gate)
 }
-
-// proba brute de hit (après debuff éventuel)
 private fun pHit(needed: Int): Double = pGate(needed)
-
-// proba de wound
 private fun pWound(needed: Int): Double = pGate(needed)
-
-// proba “unsaved” après save + rend
 private fun pUnsaved(baseSave: Int?, rend: Int): Double {
-    // baseSave: 2..6, null = no save
     if (baseSave == null) return 1.0
     val eff = baseSave + rend
-    if (eff >= 7) return 1.0 // plus de save
-    val pSave = pGate(eff)   // réussite de la save
+    if (eff >= 7) return 1.0
+    val pSave = pGate(eff)
     return 1.0 - pSave
 }
-
-// facteur ward (part de dégâts qui passe après ward)
 private fun wardFactor(target: TargetConfig): Double {
     if (!target.wardEnabled) return 1.0
     val pWard = pGate(target.wardNeeded)
     return 1.0 - pWard
 }
-
-// Calcul d’EV des dégâts pour un profil contre une save donnée
 private fun expectedDamageForProfile(
     profile: AttackProfile,
     target: TargetConfig,
-    baseSave: Int? // 2..6, null = no save
+    baseSave: Int?
 ): Double {
     val attacksEV = expectedFromDice(profile.attacks) * max(profile.models, 0)
     val dmgEV = expectedFromDice(profile.damage)
     val wardMul = wardFactor(target)
 
-    // to hit avec debuff éventuel
-    val effHit = clampGate(
-        if (target.debuffHitEnabled) profile.toHit.needed + target.debuffHitValue
-        else profile.toHit.needed
-    )
+    val effHit = clampGate(if (target.debuffHitEnabled) profile.toHit.needed + target.debuffHitValue else profile.toHit.needed)
     val phit = pHit(effHit)
 
-    // partition des critiques : mortal > auto > normal
     val pMortalMain = pCritHit(profile.critMortalOn, effHit)
     val pAutoMainRaw = pCritHit(profile.critAutoWoundOn, effHit)
     val pAutoMain = max(0.0, min(phit - pMortalMain, pAutoMainRaw - pMortalMain))
     val pNonCritMain = max(0.0, phit - pMortalMain - pAutoMain)
 
-    // extra hits via Crit 2 hits (l’extra est un hit “normal”)
     val pExtraHit = pCritHit(profile.crit2On, effHit)
 
     val pwound = pWound(profile.toWound.needed)
     val punsaved = pUnsaved(baseSave, profile.rend)
 
-    // Flux "mortal": applique directement les dégâts, ignore la save (mais ward s’applique)
-    val mortalDamage = attacksEV * pMortalMain * dmgEV * wardMul
-
-    // Flux "auto wound": saute le jet de wound, passe par la save puis ward
-    val autoWoundDamage = attacksEV * pAutoMain * punsaved * dmgEV * wardMul
-
-    // Flux "normal": hit → wound → save → ward
+    val mortalDamage = attacksEV * pMortalMain       * dmgEV * wardMul
+    val autoWoundDamage = attacksEV * pAutoMain      * punsaved * dmgEV * wardMul
     val normalDamage = attacksEV * pNonCritMain * pwound * punsaved * dmgEV * wardMul
-
-    // Extra hits (issus de Crit 2 hits) → passent par wound → save → ward
-    val extraDamage = attacksEV * pExtraHit * pwound * punsaved * dmgEV * wardMul
+    val extraDamage  = attacksEV * pExtraHit    * pwound * punsaved * dmgEV * wardMul
 
     return mortalDamage + autoWoundDamage + normalDamage + extraDamage
 }
-
-// Somme sur toutes les unités actives et profils
-private fun expectedDamageAll(
-    units: List<UnitEntry>,
-    target: TargetConfig,
-    baseSave: Int?
-): Double {
+private fun expectedDamageAll(units: List<UnitEntry>, target: TargetConfig, baseSave: Int?): Double {
     var sum = 0.0
-    for (u in units) {
-        if (!u.active) continue
-        for (p in u.profiles) {
-            sum += expectedDamageForProfile(p, target, baseSave)
-        }
-    }
+    for (u in units) if (u.active) for (p in u.profiles) sum += expectedDamageForProfile(p, target, baseSave)
     return sum
 }
 
@@ -209,7 +165,6 @@ fun SamoHammerApp() {
     var selectedTab by remember { mutableStateOf(0) }
     val tabs = listOf("Profils", "Target", "Simulations")
 
-    // État MVP (persistance à venir)
     var units by remember { mutableStateOf(listOf(UnitEntry(name = "Unité 1"))) }
     var target by remember { mutableStateOf(TargetConfig()) }
 
@@ -217,11 +172,7 @@ fun SamoHammerApp() {
         topBar = {
             TabRow(selectedTabIndex = selectedTab) {
                 tabs.forEachIndexed { i, title ->
-                    Tab(
-                        selected = selectedTab == i,
-                        onClick = { selectedTab = i },
-                        text = { Text(title) }
-                    )
+                    Tab(selected = selectedTab == i, onClick = { selectedTab = i }, text = { Text(title) })
                 }
             }
         },
@@ -256,12 +207,8 @@ fun ProfilesTab(units: List<UnitEntry>, onUpdateUnits: (List<UnitEntry>) -> Unit
         itemsIndexed(units) { idx, unit ->
             UnitCard(
                 unit = unit,
-                onChange = { changed ->
-                    onUpdateUnits(units.toMutableList().also { it[idx] = changed })
-                },
-                onRemove = {
-                    onUpdateUnits(units.toMutableList().also { it.removeAt(idx) })
-                }
+                onChange = { changed -> onUpdateUnits(units.toMutableList().also { it[idx] = changed }) },
+                onRemove = { onUpdateUnits(units.toMutableList().also { it.removeAt(idx) }) }
             )
         }
     }
@@ -271,7 +218,6 @@ fun ProfilesTab(units: List<UnitEntry>, onUpdateUnits: (List<UnitEntry>) -> Unit
 fun UnitCard(unit: UnitEntry, onChange: (UnitEntry) -> Unit, onRemove: () -> Unit) {
     ElevatedCard(Modifier.fillMaxWidth().animateContentSize()) {
         Column {
-            // Header
             Row(
                 modifier = Modifier.fillMaxWidth().background(MaterialTheme.colorScheme.primary).padding(12.dp),
                 verticalAlignment = Alignment.CenterVertically
@@ -281,8 +227,7 @@ fun UnitCard(unit: UnitEntry, onChange: (UnitEntry) -> Unit, onRemove: () -> Uni
                     style = MaterialTheme.typography.titleMedium,
                     color = MaterialTheme.colorScheme.onPrimary,
                     modifier = Modifier.weight(1f),
-                    maxLines = 1,
-                    overflow = TextOverflow.Ellipsis
+                    maxLines = 1, overflow = TextOverflow.Ellipsis
                 )
                 FilterChip(
                     selected = unit.active,
@@ -290,14 +235,11 @@ fun UnitCard(unit: UnitEntry, onChange: (UnitEntry) -> Unit, onRemove: () -> Uni
                     label = { Text(if (unit.active) "Activée" else "Inactive") }
                 )
                 Spacer(Modifier.width(8.dp))
-                OutlinedButton(onClick = { onChange(unit.copy(expanded = !unit.expanded)) }) {
-                    Text(if (unit.expanded) "Réduire" else "Déplier")
-                }
+                OutlinedButton(onClick = { onChange(unit.copy(expanded = !unit.expanded)) }) { Text(if (unit.expanded) "Réduire" else "Déplier") }
                 Spacer(Modifier.width(8.dp))
                 OutlinedButton(onClick = onRemove) { Text("Supprimer") }
             }
 
-            // Body
             Column(Modifier.fillMaxWidth().padding(12.dp)) {
                 if (unit.expanded) {
                     OutlinedTextField(
@@ -337,11 +279,7 @@ fun UnitCard(unit: UnitEntry, onChange: (UnitEntry) -> Unit, onRemove: () -> Uni
 }
 
 @Composable
-fun ProfileCard(
-    profile: AttackProfile,
-    onChange: (AttackProfile) -> Unit,
-    onRemove: () -> Unit
-) {
+fun ProfileCard(profile: AttackProfile, onChange: (AttackProfile) -> Unit, onRemove: () -> Unit) {
     val headerColor = if (profile.attackType == AttackType.MELEE) Color(0xFFD05050) else Color(0xFF2F6FED)
     val bodyTint = if (profile.attackType == AttackType.MELEE) Color(0xFFF9E7E7) else Color(0xFFE7EFFF)
 
@@ -356,8 +294,7 @@ fun ProfileCard(
                     color = Color.White,
                     style = MaterialTheme.typography.titleMedium,
                     modifier = Modifier.weight(1f),
-                    maxLines = 1,
-                    overflow = TextOverflow.Ellipsis
+                    maxLines = 1, overflow = TextOverflow.Ellipsis
                 )
                 OutlinedButton(
                     onClick = { onChange(profile.copy(expanded = !profile.expanded)) },
@@ -472,8 +409,7 @@ private fun CritField(label: String, value: Int?, onChange: (Int?) -> Unit) {
     Column {
         Row(verticalAlignment = Alignment.CenterVertically) {
             Checkbox(checked = enabled, onCheckedChange = {
-                enabled = it
-                onChange(if (it) 6 else null)
+                enabled = it; onChange(if (it) 6 else null)
             })
             Text(label)
         }
@@ -529,10 +465,7 @@ fun TargetTab(target: TargetConfig, onUpdate: (TargetConfig) -> Unit) {
         }
 
         Divider()
-        Text(
-            "Ces réglages s’appliquent à la simulation (onglet 3).",
-            style = MaterialTheme.typography.bodyMedium, color = Color.Gray
-        )
+        Text("Ces réglages s’appliquent à la simulation (onglet 3).", style = MaterialTheme.typography.bodyMedium, color = Color.Gray)
     }
 }
 
@@ -542,13 +475,9 @@ fun TargetTab(target: TargetConfig, onUpdate: (TargetConfig) -> Unit) {
 @Composable
 fun SimulationTab(units: List<UnitEntry>, target: TargetConfig) {
     val rows = remember(units, target) {
-        // saveLabels et mapping vers baseSave (null = no save)
         val saves = listOf(2, 3, 4, 5, 6)
         val data = mutableListOf<Pair<String, Double>>()
-        for (s in saves) {
-            val ev = expectedDamageAll(units, target, s)
-            data += "${s}+" to ev
-        }
+        for (s in saves) data += "${s}+" to expectedDamageAll(units, target, s)
         data += "—" to expectedDamageAll(units, target, null) // no save
         data
     }
