@@ -18,13 +18,11 @@ import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.itemsIndexed
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.Checkbox
 import androidx.compose.material3.Divider
 import androidx.compose.material3.ElevatedCard
-import androidx.compose.material3.ExtendedFloatingActionButton
-import androidx.compose.material3.FilterChip
-import androidx.compose.material3.FilterChipDefaults
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.OutlinedTextField
@@ -97,7 +95,7 @@ private fun asIntOr(old: Int, s: String, gate: Boolean = false): Int {
 }
 
 // -------------------------
-// Moteur (MVP, sans “crits” pour ce build)
+// Moteur
 // -------------------------
 private fun pGate(needed: Int): Double = when {
     needed <= 1 -> 1.0
@@ -109,21 +107,17 @@ private fun pHit(needed: Int, debuff: Int): Double {
     val eff = clampGate(needed + debuff)
     return pGate(eff)
 }
-
 private fun pWound(needed: Int): Double = pGate(needed)
-
 private fun pUnsaved(baseSave: Int?, rend: Int): Double {
     if (baseSave == null) return 1.0 // no save
     val eff = baseSave + rend
     if (eff >= 7) return 1.0
     return 1.0 - pGate(eff)
 }
-
 private fun wardFactor(wardNeeded: Int): Double {
     if (wardNeeded !in 2..6) return 1.0
     return 1.0 - pGate(wardNeeded)
 }
-
 private fun expectedDamageForProfile(p: AttackProfile, target: TargetConfig, baseSave: Int?): Double {
     val attacks = max(p.models, 0) * max(p.attacks, 0)
     if (attacks == 0) return 0.0
@@ -135,7 +129,6 @@ private fun expectedDamageForProfile(p: AttackProfile, target: TargetConfig, bas
 
     return attacks * ph * pw * pu * p.damage * ward
 }
-
 private fun expectedDamageAll(units: List<UnitEntry>, target: TargetConfig, baseSave: Int?): Double {
     var sum = 0.0
     for (u in units) {
@@ -162,14 +155,6 @@ fun SamoHammerApp() {
                 tabs.forEachIndexed { i, title ->
                     Tab(selected = selectedTab == i, onClick = { selectedTab = i }, text = { Text(title) })
                 }
-            }
-        },
-        floatingActionButton = {
-            if (selectedTab == 0) {
-                ExtendedFloatingActionButton(
-                    onClick = { units = units + UnitEntry(name = "Unité ${units.size + 1}") },
-                    text = { Text("Ajouter une unité") }
-                )
             }
         }
     ) { inner ->
@@ -203,12 +188,17 @@ fun ProfilesTab(units: List<UnitEntry>, onUpdateUnits: (List<UnitEntry>) -> Unit
                 }
             )
         }
+        item {
+            Button(onClick = { onUpdateUnits(units + UnitEntry(name = "Unité ${units.size + 1}")) }) {
+                Text("Ajouter une unité")
+            }
+        }
     }
 }
 
 @Composable
 fun UnitCard(unit: UnitEntry, onChange: (UnitEntry) -> Unit, onRemove: () -> Unit) {
-    ElevatedCard(Modifier.fillMaxWidth().animateContentSize()) {
+    ElevatedCard(Modifier.fillMaxWidth().animateContentSize(), shape = RoundedCornerShape(18.dp)) {
         Column {
             // Header
             Row(
@@ -226,12 +216,9 @@ fun UnitCard(unit: UnitEntry, onChange: (UnitEntry) -> Unit, onRemove: () -> Uni
                     maxLines = 1,
                     overflow = TextOverflow.Ellipsis
                 )
-                FilterChip(
-                    selected = unit.active,
-                    onClick = { onChange(unit.copy(active = !unit.active)) },
-                    label = { Text(if (unit.active) "Activée" else "Inactive") },
-                    colors = FilterChipDefaults.filterChipColors()
-                )
+                OutlinedButton(onClick = { onChange(unit.copy(active = !unit.active)) }) {
+                    Text(if (unit.active) "Désactiver" else "Activer")
+                }
                 Spacer(Modifier.width(8.dp))
                 OutlinedButton(onClick = { onChange(unit.copy(expanded = !unit.expanded)) }) {
                     Text(if (unit.expanded) "Réduire" else "Déplier")
@@ -319,7 +306,6 @@ fun ProfileCard(
 
             Column(Modifier.fillMaxWidth().background(bodyTint).padding(12.dp)) {
                 if (profile.expanded) {
-                    // Nom
                     OutlinedTextField(
                         value = profile.name,
                         onValueChange = { onChange(profile.copy(name = it)) },
@@ -328,29 +314,26 @@ fun ProfileCard(
                     )
                     Spacer(Modifier.height(8.dp))
 
-                    // Type (stable : FilterChip)
-                    Row(verticalAlignment = Alignment.CenterVertically) {
-                        Text("Type : ")
-                        Spacer(Modifier.width(8.dp))
-                        FilterChip(
-                            selected = profile.attackType == AttackType.MELEE,
+                    // Switch MELEE/SHOOT
+                    Row(
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.spacedBy(8.dp)
+                    ) {
+                        Button(
                             onClick = { onChange(profile.copy(attackType = AttackType.MELEE)) },
-                            label = { Text("MELEE") },
-                            colors = FilterChipDefaults.filterChipColors()
-                        )
-                    }
-                    Spacer(Modifier.height(8.dp))
-                    Row(verticalAlignment = Alignment.CenterVertically) {
-                        FilterChip(
-                            selected = profile.attackType == AttackType.SHOOT,
+                            colors = ButtonDefaults.buttonColors(
+                                containerColor = if (profile.attackType == AttackType.MELEE) Color(0xFFD05050) else MaterialTheme.colorScheme.secondary
+                            )
+                        ) { Text("MELEE") }
+                        Button(
                             onClick = { onChange(profile.copy(attackType = AttackType.SHOOT)) },
-                            label = { Text("SHOOT") },
-                            colors = FilterChipDefaults.filterChipColors()
-                        )
+                            colors = ButtonDefaults.buttonColors(
+                                containerColor = if (profile.attackType == AttackType.SHOOT) Color(0xFF2F6FED) else MaterialTheme.colorScheme.secondary
+                            )
+                        ) { Text("SHOOT") }
                     }
                     Spacer(Modifier.height(8.dp))
 
-                    // Models
                     OutlinedTextField(
                         value = profile.models.toString(),
                         onValueChange = { if (isValidPositiveIntOrZero(it)) onChange(profile.copy(models = it.toInt())) },
@@ -360,12 +343,11 @@ fun ProfileCard(
                     )
                     Spacer(Modifier.height(8.dp))
 
-                    // Attacks / Rend
                     Row(horizontalArrangement = Arrangement.spacedBy(8.dp), modifier = Modifier.fillMaxWidth()) {
                         OutlinedTextField(
                             value = profile.attacks.toString(),
                             onValueChange = { s -> s.toIntOrNull()?.let { onChange(profile.copy(attacks = it)) } },
-                            label = { Text("Attacks (ex: 6)") },
+                            label = { Text("Attacks") },
                             keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
                             modifier = Modifier.weight(1f)
                         )
@@ -379,7 +361,6 @@ fun ProfileCard(
                     }
                     Spacer(Modifier.height(8.dp))
 
-                    // To hit / To wound
                     Row(horizontalArrangement = Arrangement.spacedBy(8.dp), modifier = Modifier.fillMaxWidth()) {
                         OutlinedTextField(
                             value = profile.toHit.toString(),
@@ -398,11 +379,10 @@ fun ProfileCard(
                     }
                     Spacer(Modifier.height(8.dp))
 
-                    // Damage
                     OutlinedTextField(
                         value = profile.damage.toString(),
                         onValueChange = { s -> s.toIntOrNull()?.let { onChange(profile.copy(damage = it)) } },
-                        label = { Text("Damage (ex: 1, 2)") },
+                        label = { Text("Damage") },
                         keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
                         modifier = Modifier.fillMaxWidth()
                     )
@@ -417,7 +397,6 @@ fun ProfileCard(
     }
 }
 
-
 // -------------------------
 // Onglet 2 — Target
 // -------------------------
@@ -426,7 +405,6 @@ fun TargetTab(target: TargetConfig, onUpdate: (TargetConfig) -> Unit) {
     Column(Modifier.fillMaxSize().padding(16.dp), verticalArrangement = Arrangement.spacedBy(16.dp)) {
         Text("Cible (défenseur)", style = MaterialTheme.typography.titleLarge)
 
-        // Ward
         Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(12.dp)) {
             val wardChecked = target.wardNeeded in 2..6
             Checkbox(
@@ -447,7 +425,6 @@ fun TargetTab(target: TargetConfig, onUpdate: (TargetConfig) -> Unit) {
             }
         }
 
-        // Debuff Hit
         Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(12.dp)) {
             Checkbox(
                 checked = target.debuffHitEnabled,
@@ -468,11 +445,7 @@ fun TargetTab(target: TargetConfig, onUpdate: (TargetConfig) -> Unit) {
         }
 
         Divider()
-        Text(
-            "Ces réglages s’appliquent à la simulation (onglet 3).",
-            style = MaterialTheme.typography.bodyMedium,
-            color = Color.Gray
-        )
+        Text("Ces réglages s’appliquent à la simulation (onglet 3).", color = Color.Gray)
     }
 }
 
