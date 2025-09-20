@@ -19,10 +19,8 @@ jobs:
           distribution: temurin
           java-version: 17
 
-      # Étape SDK : on tolère l'erreur de licences puis on installe nous-mêmes
-      - name: Set up Android SDK (tolerate license bug)
+      - name: Set up Android SDK
         uses: android-actions/setup-android@v3
-        continue-on-error: true
         with:
           cmdline-tools-version: 11076708
 
@@ -32,10 +30,10 @@ jobs:
           export ANDROID_SDK_ROOT=/usr/local/lib/android/sdk
           export PATH="$ANDROID_SDK_ROOT/cmdline-tools/latest/bin:$ANDROID_SDK_ROOT/platform-tools:$PATH"
           sdkmanager --version
-          yes | sdkmanager --licenses
+          # Le SIGPIPE sur 'yes' casse le job à cause de -o pipefail. On neutralise avec '|| true'.
+          yes | sdkmanager --licenses || true
           sdkmanager "platforms;android-34" "build-tools;34.0.0" "platform-tools"
 
-      # Installe Gradle puis génère un wrapper local ./gradlew
       - name: Setup Gradle (8.7)
         uses: gradle/actions/setup-gradle@v3
         with:
