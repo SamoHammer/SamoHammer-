@@ -4,6 +4,7 @@ import android.os.Bundle
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
 
+// Layout (imports explicites, pas de wildcard)
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -16,11 +17,14 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.layout.weight
 
+// Lists
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.itemsIndexed
 
+// TextField options
 import androidx.compose.foundation.text.KeyboardOptions
 
+// Material3
 import androidx.compose.material3.Checkbox
 import androidx.compose.material3.Divider
 import androidx.compose.material3.ElevatedCard
@@ -33,6 +37,7 @@ import androidx.compose.material3.TabRow
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 
+// State
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
@@ -73,7 +78,7 @@ data class AttackProfile(
     val attacks: Int = 1,
     val toHit: Int = 4,     // 2..6
     val toWound: Int = 4,   // 2..6
-    val rend: Int = 0,      // >= 0
+    val rend: Int = 0,      // >= 0 (rend positif dégrade la save)
     val damage: Int = 1
 )
 
@@ -309,7 +314,7 @@ private fun ProfileEditor(
                 TextButton(onClick = onRemove) { Text("Supprimer") }
             }
 
-            // Grille 2 colonnes — paramètres nommés (évite l'ambiguïté du lambda)
+            // Grille 2 colonnes — paramètres nommés (évite toute ambiguïté du lambda)
             Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
                 Row(
                     horizontalArrangement = Arrangement.spacedBy(12.dp),
@@ -400,7 +405,7 @@ private fun GateField2to6(
     OutlinedTextField(
         value = text,
         onValueChange = { newText ->
-            val digits = newText.filter { ch -> ch.isDigit() }.take(1) // un seul chiffre
+            val digits = newText.filter { ch -> ch.isDigit() }.take(1)
             text = digits
             val v = digits.toIntOrNull()
             if (v != null && v in 2..6) {
@@ -428,7 +433,7 @@ fun TargetTab(target: TargetConfig, onUpdate: (TargetConfig) -> Unit) {
     ) {
         Text("Buffs/Débuffs de la cible", style = MaterialTheme.typography.titleMedium)
 
-        // Ward (0=off ou 2..6) — resync UI quand la valeur globale change
+        // Ward (0=off ou 2..6)
         Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
             Text("Ward")
             var wardTxt by remember(target.wardNeeded) {
