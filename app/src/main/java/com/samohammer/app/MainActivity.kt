@@ -92,7 +92,7 @@ private fun expectedDamageForProfile(p: AttackProfile, target: TargetConfig, bas
 }
 
 private fun expectedDamageAll(units: List<UnitEntry>, target: TargetConfig, baseSave: Int?): Double =
-    units.filter { a it.active }.flatMap { it.profiles }.sumOf { expectedDamageForProfile(it, target, baseSave) }
+    units.filter { it.active }.flatMap { it.profiles }.sumOf { expectedDamageForProfile(it, target, baseSave) }
 
     // -------------------------
 // Activity
