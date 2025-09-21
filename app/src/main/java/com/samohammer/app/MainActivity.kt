@@ -9,10 +9,8 @@ import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
-import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
-import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.width
 
@@ -248,7 +246,6 @@ fun ProfilesTab(units: List<UnitEntry>, onUpdateUnits: (List<UnitEntry>) -> Unit
                             }
                         ) { Text("Ajouter profil") }
 
-                        // NOUVEAU : Supprimer l'unité entière
                         TextButton(
                             onClick = {
                                 onUpdateUnits(units.toMutableList().also { it.removeAt(unitIndex) })
@@ -256,7 +253,7 @@ fun ProfilesTab(units: List<UnitEntry>, onUpdateUnits: (List<UnitEntry>) -> Unit
                         ) { Text("Supprimer unité") }
                     }
 
-                    // Profils (sans bouton supprimer)
+                    // Profils (AVEC suppression individuelle maintenant)
                     unit.profiles.forEachIndexed { pIndex, profile ->
                         ProfileEditor(
                             profile = profile,
@@ -264,6 +261,17 @@ fun ProfilesTab(units: List<UnitEntry>, onUpdateUnits: (List<UnitEntry>) -> Unit
                                 onUpdateUnits(
                                     units.toMutableList().also { list ->
                                         val newProfiles = unit.profiles.toMutableList().also { it[pIndex] = updated }
+                                        list[unitIndex] = unit.copy(profiles = newProfiles)
+                                    }
+                                )
+                            },
+                            onRemove = {
+                                onUpdateUnits(
+                                    units.toMutableList().also { list ->
+                                        val newProfiles = unit.profiles.toMutableList().also {
+                                            if (it.size > 1) it.removeAt(pIndex)
+                                            // si 1 seul profil, on ignore la suppression (garde-fou MVP)
+                                        }
                                         list[unitIndex] = unit.copy(profiles = newProfiles)
                                     }
                                 )
@@ -279,12 +287,13 @@ fun ProfilesTab(units: List<UnitEntry>, onUpdateUnits: (List<UnitEntry>) -> Unit
 @Composable
 private fun ProfileEditor(
     profile: AttackProfile,
-    onChange: (AttackProfile) -> Unit
+    onChange: (AttackProfile) -> Unit,
+    onRemove: () -> Unit
 ) {
     ElevatedCard(modifier = Modifier.fillMaxWidth()) {
         Column(modifier = Modifier.padding(12.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
 
-            // Ligne titre + type (plus de bouton supprimer ici)
+            // Ligne titre + type + SUPPRIMER PROFIL
             Row(
                 verticalAlignment = Alignment.CenterVertically,
                 horizontalArrangement = Arrangement.spacedBy(12.dp),
@@ -306,6 +315,9 @@ private fun ProfileEditor(
                 ) {
                     Text(text = if (profile.attackType == AttackType.MELEE) "Melee" else "Shoot")
                 }
+
+                // NEW: supprimer profil
+                TextButton(onClick = onRemove) { Text("Supprimer profil") }
             }
 
             // Grille 2 colonnes — paramètres nommés
