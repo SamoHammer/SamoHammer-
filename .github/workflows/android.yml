@@ -21,21 +21,25 @@ jobs:
       - name: Grant execute permission for gradlew
         run: chmod +x gradlew
 
-      # 1) Diagnostic ressources (AAPT) – affichera l'erreur de link s'il y en a une
-      - name: Process resources (diagnostic)
-        run: ./gradlew :app:processDebugResources --no-daemon --info --stacktrace --warning-mode all
+      # 0) Full clean pour purger les références de ressources/stubs en cache
+      - name: Clean
+        run: ./gradlew clean --no-daemon --no-build-cache --stacktrace
 
-      # 2) Diagnostic Kotlin – affiche les erreurs de compile si on passe l'étape ressources
+      # 1) Diagnostic ressources (AAPT) — si ça casse ici, on aura la ligne précise
+      - name: Process resources (diagnostic)
+        run: ./gradlew :app:processDebugResources --no-daemon --no-build-cache --info --stacktrace --warning-mode all
+
+      # 2) Diagnostic Kotlin — seulement si les ressources passent
       - name: Compile Kotlin (diagnostic)
         if: success()
-        run: ./gradlew :app:compileDebugKotlin --no-daemon --info --stacktrace --warning-mode all
+        run: ./gradlew :app:compileDebugKotlin --no-daemon --no-build-cache --info --stacktrace --warning-mode all
 
       # 3) Build APK si tout est OK
       - name: Build Debug APK
         if: success()
-        run: ./gradlew assembleDebug --no-daemon --stacktrace
+        run: ./gradlew assembleDebug --no-daemon --no-build-cache --stacktrace
 
-      # 4) Toujours uploader les rapports utiles
+      # 4) Rapports utiles (toujours)
       - name: Upload build reports
         if: always()
         uses: actions/upload-artifact@v4
@@ -45,9 +49,9 @@ jobs:
             **/build/reports/**
             **/build/tmp/**
             **/build/outputs/logs/**
-            **/build/kotlin/**
+            **/build/intermediates/**
 
-      # 5) Uploader l'APK si build OK
+      # 5) APK (si build OK)
       - name: Upload APK
         if: success()
         uses: actions/upload-artifact@v4
