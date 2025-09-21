@@ -212,7 +212,7 @@ fun ProfilesTab(units: List<UnitEntry>, onUpdateUnits: (List<UnitEntry>) -> Unit
             ElevatedCard {
                 Column(modifier = Modifier.padding(12.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
 
-                    // En-tête unité
+                    // En-tête unité (Active, Nom, +Profil, Supprimer unité)
                     Row(
                         verticalAlignment = Alignment.CenterVertically,
                         horizontalArrangement = Arrangement.spacedBy(12.dp),
@@ -247,9 +247,16 @@ fun ProfilesTab(units: List<UnitEntry>, onUpdateUnits: (List<UnitEntry>) -> Unit
                                 )
                             }
                         ) { Text("Ajouter profil") }
+
+                        // NOUVEAU : Supprimer l'unité entière
+                        TextButton(
+                            onClick = {
+                                onUpdateUnits(units.toMutableList().also { it.removeAt(unitIndex) })
+                            }
+                        ) { Text("Supprimer unité") }
                     }
 
-                    // Profils
+                    // Profils (sans bouton supprimer)
                     unit.profiles.forEachIndexed { pIndex, profile ->
                         ProfileEditor(
                             profile = profile,
@@ -257,16 +264,6 @@ fun ProfilesTab(units: List<UnitEntry>, onUpdateUnits: (List<UnitEntry>) -> Unit
                                 onUpdateUnits(
                                     units.toMutableList().also { list ->
                                         val newProfiles = unit.profiles.toMutableList().also { it[pIndex] = updated }
-                                        list[unitIndex] = unit.copy(profiles = newProfiles)
-                                    }
-                                )
-                            },
-                            onRemove = {
-                                onUpdateUnits(
-                                    units.toMutableList().also { list ->
-                                        val newProfiles = unit.profiles.toMutableList().also {
-                                            if (it.size > 1) it.removeAt(pIndex)
-                                        }
                                         list[unitIndex] = unit.copy(profiles = newProfiles)
                                     }
                                 )
@@ -282,13 +279,12 @@ fun ProfilesTab(units: List<UnitEntry>, onUpdateUnits: (List<UnitEntry>) -> Unit
 @Composable
 private fun ProfileEditor(
     profile: AttackProfile,
-    onChange: (AttackProfile) -> Unit,
-    onRemove: () -> Unit
+    onChange: (AttackProfile) -> Unit
 ) {
     ElevatedCard(modifier = Modifier.fillMaxWidth()) {
         Column(modifier = Modifier.padding(12.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
 
-            // Ligne titre + type + supprimer
+            // Ligne titre + type (plus de bouton supprimer ici)
             Row(
                 verticalAlignment = Alignment.CenterVertically,
                 horizontalArrangement = Arrangement.spacedBy(12.dp),
@@ -310,11 +306,9 @@ private fun ProfileEditor(
                 ) {
                     Text(text = if (profile.attackType == AttackType.MELEE) "Melee" else "Shoot")
                 }
-
-                TextButton(onClick = onRemove) { Text("Supprimer") }
             }
 
-            // Grille 2 colonnes — paramètres nommés (évite toute ambiguïté du lambda)
+            // Grille 2 colonnes — paramètres nommés
             Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
                 Row(
                     horizontalArrangement = Arrangement.spacedBy(12.dp),
