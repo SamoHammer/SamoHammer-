@@ -2,7 +2,10 @@ package com.samohammer.app
 
 import com.samohammer.app.ui.theme.SamoHammerTheme
 import com.samohammer.app.ui.theme.SamoTokens
-
+import androidx.compose.ui.text.input.KeyboardOptions
+import androidx.compose.ui.text.input.KeyboardType
+import androidx.compose.ui.text.input.ImeAction
+import androidx.compose.foundation.layout.weight
 import android.os.Bundle
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
