@@ -4,17 +4,23 @@ import android.os.Bundle
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
 
-// Foundation + layout (inclut Row, Column, Box, Spacer, weight, Arrangement)
-import androidx.compose.foundation.layout.*
+import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.layout.weight
 
-// Listes
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.itemsIndexed
 
-// TextField options numériques
 import androidx.compose.foundation.text.KeyboardOptions
 
-// Material 3 de base (pas de composants exotiques)
 import androidx.compose.material3.Checkbox
 import androidx.compose.material3.Divider
 import androidx.compose.material3.ElevatedCard
@@ -27,7 +33,6 @@ import androidx.compose.material3.TabRow
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 
-// State & Compose runtime
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
@@ -140,7 +145,16 @@ fun SamoHammerApp() {
                 UnitEntry(
                     name = "Unité 1",
                     profiles = listOf(
-                        AttackProfile("Profil 1", AttackType.MELEE, models = 1, attacks = 4, toHit = 4, toWound = 4, rend = 1, damage = 1)
+                        AttackProfile(
+                            name = "Profil 1",
+                            attackType = AttackType.MELEE,
+                            models = 1,
+                            attacks = 4,
+                            toHit = 4,
+                            toWound = 4,
+                            rend = 1,
+                            damage = 1
+                        )
                     )
                 )
             )
@@ -168,10 +182,10 @@ fun SamoHammerApp() {
             }
         }
     ) { inner ->
-        Box(Modifier.padding(inner)) {
+        Box(modifier = Modifier.padding(inner)) {
             when (selectedTab) {
-                0 -> ProfilesTab(units = units, onUpdateUnits = { units = it })
-                1 -> TargetTab(target = target, onUpdate = { target = it })
+                0 -> ProfilesTab(units = units, onUpdateUnits = { newUnits -> units = newUnits })
+                1 -> TargetTab(target = target, onUpdate = { t -> target = t })
                 2 -> SimulationTab(units = units, target = target)
             }
         }
@@ -191,7 +205,7 @@ fun ProfilesTab(units: List<UnitEntry>, onUpdateUnits: (List<UnitEntry>) -> Unit
     ) {
         itemsIndexed(units) { unitIndex, unit ->
             ElevatedCard {
-                Column(Modifier.padding(12.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
+                Column(modifier = Modifier.padding(12.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
 
                     // En-tête unité
                     Row(
@@ -202,17 +216,17 @@ fun ProfilesTab(units: List<UnitEntry>, onUpdateUnits: (List<UnitEntry>) -> Unit
                         Checkbox(
                             checked = unit.active,
                             onCheckedChange = { checked ->
-                                onUpdateUnits(units.toMutableList().also {
-                                    it[unitIndex] = unit.copy(active = checked)
-                                })
+                                onUpdateUnits(
+                                    units.toMutableList().also { it[unitIndex] = unit.copy(active = checked) }
+                                )
                             }
                         )
                         OutlinedTextField(
                             value = unit.name,
                             onValueChange = { newName ->
-                                onUpdateUnits(units.toMutableList().also {
-                                    it[unitIndex] = unit.copy(name = newName)
-                                })
+                                onUpdateUnits(
+                                    units.toMutableList().also { it[unitIndex] = unit.copy(name = newName) }
+                                )
                             },
                             label = { Text("Nom de l’unité") },
                             singleLine = true,
@@ -220,10 +234,12 @@ fun ProfilesTab(units: List<UnitEntry>, onUpdateUnits: (List<UnitEntry>) -> Unit
                         )
                         TextButton(
                             onClick = {
-                                onUpdateUnits(units.toMutableList().also { list ->
-                                    val newProfiles = unit.profiles + AttackProfile(name = "Profil ${unit.profiles.size + 1}")
-                                    list[unitIndex] = unit.copy(profiles = newProfiles)
-                                })
+                                onUpdateUnits(
+                                    units.toMutableList().also { list ->
+                                        val newProfiles = unit.profiles + AttackProfile(name = "Profil ${unit.profiles.size + 1}")
+                                        list[unitIndex] = unit.copy(profiles = newProfiles)
+                                    }
+                                )
                             }
                         ) { Text("Ajouter profil") }
                     }
@@ -233,18 +249,22 @@ fun ProfilesTab(units: List<UnitEntry>, onUpdateUnits: (List<UnitEntry>) -> Unit
                         ProfileEditor(
                             profile = profile,
                             onChange = { updated ->
-                                onUpdateUnits(units.toMutableList().also { list ->
-                                    val newProfiles = unit.profiles.toMutableList().also { it[pIndex] = updated }
-                                    list[unitIndex] = unit.copy(profiles = newProfiles)
-                                })
+                                onUpdateUnits(
+                                    units.toMutableList().also { list ->
+                                        val newProfiles = unit.profiles.toMutableList().also { it[pIndex] = updated }
+                                        list[unitIndex] = unit.copy(profiles = newProfiles)
+                                    }
+                                )
                             },
                             onRemove = {
-                                onUpdateUnits(units.toMutableList().also { list ->
-                                    val newProfiles = unit.profiles.toMutableList().also {
-                                        if (it.size > 1) it.removeAt(pIndex)
+                                onUpdateUnits(
+                                    units.toMutableList().also { list ->
+                                        val newProfiles = unit.profiles.toMutableList().also {
+                                            if (it.size > 1) it.removeAt(pIndex)
+                                        }
+                                        list[unitIndex] = unit.copy(profiles = newProfiles)
                                     }
-                                    list[unitIndex] = unit.copy(profiles = newProfiles)
-                                })
+                                )
                             }
                         )
                     }
@@ -260,8 +280,8 @@ private fun ProfileEditor(
     onChange: (AttackProfile) -> Unit,
     onRemove: () -> Unit
 ) {
-    ElevatedCard(Modifier.fillMaxWidth()) {
-        Column(Modifier.padding(12.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
+    ElevatedCard(modifier = Modifier.fillMaxWidth()) {
+        Column(modifier = Modifier.padding(12.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
 
             // Ligne titre + type + supprimer
             Row(
@@ -271,7 +291,7 @@ private fun ProfileEditor(
             ) {
                 OutlinedTextField(
                     value = profile.name,
-                    onValueChange = { onChange(profile.copy(name = it)) },
+                    onValueChange = { newName -> onChange(profile.copy(name = newName)) },
                     label = { Text("Nom du profil") },
                     singleLine = true,
                     modifier = Modifier.weight(1f)
@@ -283,25 +303,64 @@ private fun ProfileEditor(
                         onChange(profile.copy(attackType = next))
                     }
                 ) {
-                    Text(if (profile.attackType == AttackType.MELEE) "Melee" else "Shoot")
+                    Text(text = if (profile.attackType == AttackType.MELEE) "Melee" else "Shoot")
                 }
 
                 TextButton(onClick = onRemove) { Text("Supprimer") }
             }
 
-            // Grille 2 colonnes
+            // Grille 2 colonnes — paramètres nommés (évite l'ambiguïté du lambda)
             Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
-                Row(horizontalArrangement = Arrangement.spacedBy(12.dp), modifier = Modifier.fillMaxWidth()) {
-                    NumberField("Models", profile.models, { onChange(profile.copy(models = it.coerceAtLeast(0))) }, Modifier.width(120.dp))
-                    NumberField("Attacks", profile.attacks, { onChange(profile.copy(attacks = it.coerceAtLeast(0))) }, Modifier.width(120.dp))
+                Row(
+                    horizontalArrangement = Arrangement.spacedBy(12.dp),
+                    modifier = Modifier.fillMaxWidth()
+                ) {
+                    NumberField(
+                        label = "Models",
+                        value = profile.models,
+                        onValue = { v -> onChange(profile.copy(models = v.coerceAtLeast(0))) },
+                        modifier = Modifier.width(120.dp)
+                    )
+                    NumberField(
+                        label = "Attacks",
+                        value = profile.attacks,
+                        onValue = { v -> onChange(profile.copy(attacks = v.coerceAtLeast(0))) },
+                        modifier = Modifier.width(120.dp)
+                    )
                 }
-                Row(horizontalArrangement = Arrangement.spacedBy(12.dp), modifier = Modifier.fillMaxWidth()) {
-                    GateField2to6("Hit (2..6)", profile.toHit) { onChange(profile.copy(toHit = it)) }
-                    GateField2to6("Wound (2..6)", profile.toWound) { onChange(profile.copy(toWound = it)) }
+                Row(
+                    horizontalArrangement = Arrangement.spacedBy(12.dp),
+                    modifier = Modifier.fillMaxWidth()
+                ) {
+                    GateField2to6(
+                        label = "Hit (2..6)",
+                        value = profile.toHit,
+                        onValue = { v -> onChange(profile.copy(toHit = v)) },
+                        modifier = Modifier.width(120.dp)
+                    )
+                    GateField2to6(
+                        label = "Wound (2..6)",
+                        value = profile.toWound,
+                        onValue = { v -> onChange(profile.copy(toWound = v)) },
+                        modifier = Modifier.width(120.dp)
+                    )
                 }
-                Row(horizontalArrangement = Arrangement.spacedBy(12.dp), modifier = Modifier.fillMaxWidth()) {
-                    NumberField("Rend (+)", profile.rend, { onChange(profile.copy(rend = it.coerceAtLeast(0))) }, Modifier.width(120.dp))
-                    NumberField("Damage", profile.damage, { onChange(profile.copy(damage = it.coerceAtLeast(0))) }, Modifier.width(120.dp))
+                Row(
+                    horizontalArrangement = Arrangement.spacedBy(12.dp),
+                    modifier = Modifier.fillMaxWidth()
+                ) {
+                    NumberField(
+                        label = "Rend (+)",
+                        value = profile.rend,
+                        onValue = { v -> onChange(profile.copy(rend = v.coerceAtLeast(0))) },
+                        modifier = Modifier.width(120.dp)
+                    )
+                    NumberField(
+                        label = "Damage",
+                        value = profile.damage,
+                        onValue = { v -> onChange(profile.copy(damage = v.coerceAtLeast(0))) },
+                        modifier = Modifier.width(120.dp)
+                    )
                 }
             }
         }
@@ -319,7 +378,7 @@ private fun NumberField(
     OutlinedTextField(
         value = value.toString(),
         onValueChange = { txt ->
-            val digits = txt.filter { it.isDigit() }
+            val digits = txt.filter { ch -> ch.isDigit() }
             onValue(if (digits.isEmpty()) 0 else digits.toInt())
         },
         label = { Text(label) },
@@ -329,22 +388,24 @@ private fun NumberField(
     )
 }
 
-// Gate 2..6
+// Gate 2..6 — texte local + mise à jour seulement si 2..6
 @Composable
 private fun GateField2to6(
     label: String,
     value: Int,
     onValue: (Int) -> Unit,
-    modifier: Modifier = Modifier.width(120.dp)
+    modifier: Modifier = Modifier
 ) {
     var text by remember(value) { mutableStateOf(value.toString()) }
     OutlinedTextField(
         value = text,
-        onValueChange = { raw ->
-            val digits = raw.filter { ch -> ch.isDigit() }.take(1)
+        onValueChange = { newText ->
+            val digits = newText.filter { ch -> ch.isDigit() }.take(1) // un seul chiffre
             text = digits
             val v = digits.toIntOrNull()
-            if (v != null && v in 2..6) onValue(v)
+            if (v != null && v in 2..6) {
+                onValue(v)
+            }
         },
         label = { Text(label) },
         placeholder = { Text("2..6") },
@@ -355,19 +416,19 @@ private fun GateField2to6(
 }
 
 // -------------------------
-// Onglet Target (corrigé: lambdas nommées)
+// Onglet Target
 // -------------------------
 @Composable
 fun TargetTab(target: TargetConfig, onUpdate: (TargetConfig) -> Unit) {
     Column(
-        Modifier
+        modifier = Modifier
             .fillMaxSize()
             .padding(16.dp),
         verticalArrangement = Arrangement.spacedBy(12.dp)
     ) {
         Text("Buffs/Débuffs de la cible", style = MaterialTheme.typography.titleMedium)
 
-        // Ward (0=off ou 2..6)
+        // Ward (0=off ou 2..6) — resync UI quand la valeur globale change
         Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
             Text("Ward")
             var wardTxt by remember(target.wardNeeded) {
@@ -386,7 +447,7 @@ fun TargetTab(target: TargetConfig, onUpdate: (TargetConfig) -> Unit) {
                 singleLine = true,
                 modifier = Modifier.width(120.dp)
             )
-            Text(if (target.wardNeeded in 2..6) "${target.wardNeeded}+" else "off")
+            Text(text = if (target.wardNeeded in 2..6) "${target.wardNeeded}+" else "off")
         }
 
         // Debuff to hit (checkbox + valeur 0..3)
@@ -416,7 +477,7 @@ fun TargetTab(target: TargetConfig, onUpdate: (TargetConfig) -> Unit) {
         Divider()
 
         Text(
-            "Ward: " + (if (target.wardNeeded in 2..6) "${target.wardNeeded}+" else "off") +
+            text = "Ward: " + (if (target.wardNeeded in 2..6) "${target.wardNeeded}+" else "off") +
                     " • Debuff hit: " + (if (target.debuffHitEnabled) "-${target.debuffHitValue}" else "off")
         )
     }
@@ -428,16 +489,17 @@ fun TargetTab(target: TargetConfig, onUpdate: (TargetConfig) -> Unit) {
 @Composable
 fun SimulationTab(units: List<UnitEntry>, target: TargetConfig) {
     Column(
-        Modifier
+        modifier = Modifier
             .fillMaxSize()
             .padding(16.dp),
         verticalArrangement = Arrangement.spacedBy(8.dp)
     ) {
         Text("Espérance de dégâts (toutes unités actives)", style = MaterialTheme.typography.titleMedium)
-        listOf(2, 3, 4, 5, 6, null).forEach { save ->
+        val saves = listOf(2, 3, 4, 5, 6, null)
+        saves.forEach { save ->
             val label = if (save == null) "No Save" else "${save}+"
             val dmg = expectedDamageAll(units, target, save)
-            Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
+            Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
                 Text(label)
                 Text(String.format("%.2f", dmg))
             }
