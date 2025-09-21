@@ -33,27 +33,26 @@ android {
     kotlinOptions { jvmTarget = "17" }
 
     buildFeatures { compose = true }
-
-    // ⚠️ Doit être aligné avec Kotlin 1.9.22 → Compose Compiler 1.5.4
     composeOptions { kotlinCompilerExtensionVersion = "1.5.4" }
 
-    packaging {
-        resources { excludes += "/META-INF/{AL2.0,LGPL2.1}" }
-    }
+    packaging { resources { excludes += "/META-INF/{AL2.0,LGPL2.1}" } }
 }
 
 dependencies {
+    // Aligne TOUT le monde sur Kotlin 1.9.22 (et évite les doublons de stdlib/-jdk7/-jdk8)
+    implementation(platform("org.jetbrains.kotlin:kotlin-bom:1.9.22"))
+
+    // Core AndroidX
     implementation("androidx.core:core-ktx:1.12.0")
     implementation("androidx.lifecycle:lifecycle-runtime-ktx:2.6.2")
     implementation("androidx.activity:activity-compose:1.8.2")
 
+    // Compose
     implementation("androidx.compose.ui:ui:1.5.4")
     implementation("androidx.compose.ui:ui-tooling-preview:1.5.4")
     implementation("androidx.compose.material3:material3:1.1.2")
 
-    // Force Kotlin stdlib unique version to avoid duplicate class errors
-    implementation("org.jetbrains.kotlin:kotlin-stdlib:1.9.22")
-
+    // Tests
     testImplementation("junit:junit:4.13.2")
     androidTestImplementation("androidx.test.ext:junit:1.1.5")
     androidTestImplementation("androidx.test.espresso:espresso-core:3.5.1")
