@@ -39,7 +39,7 @@ android {
 }
 
 dependencies {
-    // Aligne toutes les libs Kotlin sur la même version
+    // Aligne toutes les libs Kotlin
     implementation(platform("org.jetbrains.kotlin:kotlin-bom:1.9.22"))
 
     // Core AndroidX
@@ -52,6 +52,9 @@ dependencies {
     implementation("androidx.compose.ui:ui-tooling-preview:1.5.4")
     implementation("androidx.compose.material3:material3:1.1.2")
 
+    // ✅ Requis pour les styles XML Theme.Material3.*
+    implementation("com.google.android.material:material:1.11.0")
+
     // Tests
     testImplementation("junit:junit:4.13.2")
     androidTestImplementation("androidx.test.ext:junit:1.1.5")
@@ -61,7 +64,7 @@ dependencies {
     debugImplementation("androidx.compose.ui:ui-test-manifest:1.5.4")
 }
 
-// 🚑 Patch : suppression explicite des doublons stdlib-jdk7/jdk8
+// 🔒 Évite les doublons Kotlin (jdk7/jdk8) qui cassent au packaging
 configurations.configureEach {
     exclude(group = "org.jetbrains.kotlin", module = "kotlin-stdlib-jdk7")
     exclude(group = "org.jetbrains.kotlin", module = "kotlin-stdlib-jdk8")
