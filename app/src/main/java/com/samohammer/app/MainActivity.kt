@@ -62,10 +62,6 @@ data class TargetConfig(
 // Helpers
 // -------------------------
 private fun clamp2to6(x: Int) = x.coerceIn(2, 6)
-private fun parseInt(raw: String, fallback: Int): Int {
-    val v = raw.toIntOrNull()
-    return v ?: fallback
-}
 
 // -------------------------
 // Moteur
@@ -160,7 +156,7 @@ fun SamoHammerApp() {
 }
 
 // -------------------------
-// Onglet Profils (édition complète)
+// Onglet Profils (éditable)
 // -------------------------
 @Composable
 fun ProfilesTab(units: List<UnitEntry>, onUpdateUnits: (List<UnitEntry>) -> Unit) {
@@ -273,15 +269,15 @@ private fun ProfileEditor(
                 TextButton(onClick = onRemove) { Text("Supprimer") }
             }
 
-            // Grille 2 colonnes
+            // Grille 2 colonnes (avec GateField2to6 pour Hit/Wound)
             Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
                 Row(horizontalArrangement = Arrangement.spacedBy(12.dp), modifier = Modifier.fillMaxWidth()) {
                     NumberField("Models", profile.models, { onChange(profile.copy(models = it.coerceAtLeast(0))) }, Modifier.width(120.dp))
                     NumberField("Attacks", profile.attacks, { onChange(profile.copy(attacks = it.coerceAtLeast(0))) }, Modifier.width(120.dp))
                 }
                 Row(horizontalArrangement = Arrangement.spacedBy(12.dp), modifier = Modifier.fillMaxWidth()) {
-                    NumberField("Hit (2..6)", profile.toHit, { onChange(profile.copy(toHit = it.coerceIn(2, 6))) }, Modifier.width(120.dp))
-                    NumberField("Wound (2..6)", profile.toWound, { onChange(profile.copy(toWound = it.coerceIn(2, 6))) }, Modifier.width(120.dp))
+                    GateField2to6("Hit (2..6)", profile.toHit) { onChange(profile.copy(toHit = it)) }
+                    GateField2to6("Wound (2..6)", profile.toWound) { onChange(profile.copy(toWound = it)) }
                 }
                 Row(horizontalArrangement = Arrangement.spacedBy(12.dp), modifier = Modifier.fillMaxWidth()) {
                     NumberField("Rend (+)", profile.rend, { onChange(profile.copy(rend = it.coerceAtLeast(0))) }, Modifier.width(120.dp))
@@ -292,6 +288,7 @@ private fun ProfileEditor(
     }
 }
 
+// ---------- Champs numériques ----------
 @Composable
 private fun NumberField(
     label: String,
@@ -302,8 +299,8 @@ private fun NumberField(
     OutlinedTextField(
         value = value.toString(),
         onValueChange = { txt ->
-            val v = txt.filter { it.isDigit() }
-            onValue(if (v.isEmpty()) 0 else v.toInt())
+            val digits = txt.filter { it.isDigit() }
+            onValue(if (digits.isEmpty()) 0 else digits.toInt())
         },
         label = { Text(label) },
         singleLine = true,
@@ -312,8 +309,36 @@ private fun NumberField(
     )
 }
 
+// Gate 2..6 — on met à jour la valeur **uniquement** si l’entrée est dans l’intervalle.
+// Le texte local reste ce que tape l’utilisateur, donc pas d’“aspiration” vers 2 ou 6.
+@Composable
+private fun GateField2to6(
+    label: String,
+    value: Int,
+    onValue: (Int) -> Unit,
+    modifier: Modifier = Modifier.width(120.dp)
+) {
+    var text by remember(value) { mutableStateOf(value.toString()) }
+    OutlinedTextField(
+        value = text,
+        onValueChange = { raw ->
+            val digits = raw.filter { it.isDigit() }.take(1) // un seul chiffre
+            text = digits
+            val v = digits.toIntOrNull()
+            if (v != null && v in 2..6) {
+                onValue(v) // on ne pousse l’état que si c’est dans [2..6]
+            }
+        },
+        label = { Text(label) },
+        placeholder = { Text("2..6") },
+        singleLine = true,
+        keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
+        modifier = modifier
+    )
+}
+
 // -------------------------
-// Onglet Target (corrigé, réactif)
+// Onglet Target (resync Ward + contrôle Debuff)
 // -------------------------
 @Composable
 fun TargetTab(target: TargetConfig, onUpdate: (TargetConfig) -> Unit) {
@@ -325,15 +350,18 @@ fun TargetTab(target: TargetConfig, onUpdate: (TargetConfig) -> Unit) {
     ) {
         Text("Buffs/Débuffs de la cible", style = MaterialTheme.typography.titleMedium)
 
-        // Ward: 0 (=off) ou 2..6
+        // Ward (0=off ou 2..6) — resynchronisé quand target change
         Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
             Text("Ward")
-            var wardTxt by remember { mutableStateOf(if (target.wardNeeded in 2..6) target.wardNeeded.toString() else "") }
+            var wardTxt by remember(target.wardNeeded) {
+                mutableStateOf(if (target.wardNeeded in 2..6) target.wardNeeded.toString() else "")
+            }
             OutlinedTextField(
                 value = wardTxt,
                 onValueChange = {
-                    wardTxt = it.filter { ch -> ch.isDigit() }.take(1) // 1 chiffre max (2..6)
-                    val v = wardTxt.toIntOrNull()
+                    val digits = it.filter { ch -> ch.isDigit() }.take(1)
+                    wardTxt = digits
+                    val v = digits.toIntOrNull()
                     onUpdate(target.copy(wardNeeded = if (v != null && v in 2..6) v else 0))
                 },
                 placeholder = { Text("off ou 2..6") },
@@ -348,7 +376,9 @@ fun TargetTab(target: TargetConfig, onUpdate: (TargetConfig) -> Unit) {
         Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
             Checkbox(
                 checked = target.debuffHitEnabled,
-                onCheckedChange = { onUpdate(target.copy(debuffHitEnabled = it)) }
+                onCheckedChange = { enabled ->
+                    onUpdate(target.copy(debuffHitEnabled = enabled, debuffHitValue = if (enabled) target.debuffHitValue else 0))
+                }
             )
             Text("Debuff to hit")
             OutlinedTextField(
@@ -368,7 +398,6 @@ fun TargetTab(target: TargetConfig, onUpdate: (TargetConfig) -> Unit) {
 
         Divider()
 
-        // Récap live (contrôle visuel)
         Text(
             "Ward: " + (if (target.wardNeeded in 2..6) "${target.wardNeeded}+" else "off") +
                     " • Debuff hit: " + (if (target.debuffHitEnabled) "-${target.debuffHitValue}" else "off")
@@ -377,7 +406,7 @@ fun TargetTab(target: TargetConfig, onUpdate: (TargetConfig) -> Unit) {
 }
 
 // -------------------------
-// Onglet Simulations (réactif)
+// Onglet Simulations
 // -------------------------
 @Composable
 fun SimulationTab(units: List<UnitEntry>, target: TargetConfig) {
