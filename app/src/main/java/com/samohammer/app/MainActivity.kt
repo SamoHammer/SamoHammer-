@@ -4,7 +4,7 @@ import android.os.Bundle
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
 
-// Layout (imports explicites, pas de wildcard)
+// Layout (imports explicites)
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -21,7 +21,7 @@ import androidx.compose.foundation.layout.weight
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.itemsIndexed
 
-// TextField options
+// TextField options (foundation)
 import androidx.compose.foundation.text.KeyboardOptions
 
 // Material3
@@ -44,6 +44,7 @@ import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 
+// UI utils
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.text.input.KeyboardType
@@ -78,7 +79,7 @@ data class AttackProfile(
     val attacks: Int = 1,
     val toHit: Int = 4,     // 2..6
     val toWound: Int = 4,   // 2..6
-    val rend: Int = 0,      // >= 0 (rend positif dégrade la save)
+    val rend: Int = 0,      // >= 0 (rend positif = dégrade la save)
     val damage: Int = 1
 )
 
