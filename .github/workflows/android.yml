@@ -1,10 +1,8 @@
 name: Android CI
 
 on:
-  push:
-    branches: [ "main" ]
-  pull_request:
-    branches: [ "main" ]
+  push: { branches: [ "main" ] }
+  pull_request: { branches: [ "main" ] }
 
 concurrency:
   group: android-ci-${{ github.ref }}
@@ -25,42 +23,44 @@ jobs:
       - name: Grant execute permission for gradlew
         run: chmod +x gradlew
 
-      # 0) Full clean pour purger les références de ressources/stubs en cache
       - name: Clean
         run: ./gradlew clean --no-daemon --no-build-cache --stacktrace
 
-      # 1) Diagnostic ressources (AAPT) — si ça casse ici, on aura la ligne précise
       - name: Process resources (diagnostic)
         run: ./gradlew :app:processDebugResources --no-daemon --no-build-cache --info --stacktrace --warning-mode all
 
-      # 2) Diagnostic Kotlin (ULTRA verbeux) — donnera les lignes "e: fichier:ligne"
-      - name: Compile Kotlin (diagnostic)
-        if: success()
-        run: ./gradlew :app:compileDebugKotlin \
-             --no-daemon --no-build-cache --rerun-tasks \
-             --info --debug --stacktrace --warning-mode all \
-             -Pkotlin.compiler.execution.strategy=in-process \
-             -Dkotlin.incremental=false
+      # ⬇️ Capture *toute* la sortie du compilateur Kotlin dans un fichier texte
+      - name: Compile Kotlin (diagnostic, captured)
+        shell: bash
+        run: |
+          set -o pipefail
+          mkdir -p ci-logs
+          ./gradlew :app:compileDebugKotlin \
+            --no-daemon --no-build-cache --rerun-tasks \
+            --info --stacktrace --warning-mode all \
+            -Pkotlin.compiler.execution.strategy=in-process \
+            -Dkotlin.incremental=false 2>&1 | tee ci-logs/compile-kotlin-console.txt
 
-      # 3) Build APK si tout est OK
       - name: Build Debug APK
         if: success()
         run: ./gradlew assembleDebug --no-daemon --no-build-cache --stacktrace
 
-      # 4) Rapports utiles (toujours)
+      # Uploader les logs *console* et les dossiers temporaires si présents
       - name: Upload build reports
         if: always()
         uses: actions/upload-artifact@v4
         with:
           name: gradle-reports
           path: |
+            ci-logs/**
+            app/build/reports/**
+            app/build/outputs/logs/**
+            app/build/tmp/kotlin-compileDebugKotlin/**
+            app/build/tmp/compileDebugKotlin/**
+            app/build/tmp/kotlin-classes/**
             **/build/reports/**
-            **/build/tmp/**
             **/build/outputs/logs/**
-            **/build/intermediates/**
-            **/build/kotlin/**
 
-      # 5) APK (si build OK)
       - name: Upload APK
         if: success()
         uses: actions/upload-artifact@v4
