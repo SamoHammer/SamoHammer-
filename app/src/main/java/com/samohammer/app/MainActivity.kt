@@ -43,15 +43,13 @@ data class AttackProfile(
     val toHit: Int = 4,     // 2..6
     val toWound: Int = 4,   // 2..6
     val rend: Int = 0,      // >= 0
-    val damage: Int = 1,
-    val expanded: Boolean = true
+    val damage: Int = 1
 )
 
 data class UnitEntry(
     val name: String = "Nouvelle unité",
     val active: Boolean = true,
-    val profiles: List<AttackProfile> = listOf(AttackProfile(name = "Profil 1")),
-    val expanded: Boolean = true
+    val profiles: List<AttackProfile> = listOf(AttackProfile(name = "Profil 1"))
 )
 
 data class TargetConfig(
@@ -63,10 +61,10 @@ data class TargetConfig(
 // -------------------------
 // Helpers
 // -------------------------
-private fun clampGate(x: Int) = x.coerceIn(2, 6)
-private fun asIntOr(old: Int, s: String, gate: Boolean = false): Int {
-    val v = s.toIntOrNull() ?: return old
-    return if (gate) clampGate(v) else v
+private fun clamp2to6(x: Int) = x.coerceIn(2, 6)
+private fun parseInt(raw: String, fallback: Int): Int {
+    val v = raw.toIntOrNull()
+    return v ?: fallback
 }
 
 // -------------------------
@@ -79,39 +77,35 @@ private fun pGate(needed: Int): Double = when {
 }
 
 private fun pHit(needed: Int, debuff: Int): Double {
-    val eff = clampGate(needed + debuff)
+    val eff = clamp2to6(needed + debuff)
     return pGate(eff)
 }
 private fun pWound(needed: Int): Double = pGate(needed)
+
 private fun pUnsaved(baseSave: Int?, rend: Int): Double {
     if (baseSave == null) return 1.0 // no save
     val eff = baseSave + rend
     if (eff >= 7) return 1.0
     return 1.0 - pGate(eff)
 }
+
 private fun wardFactor(wardNeeded: Int): Double {
     if (wardNeeded !in 2..6) return 1.0
     return 1.0 - pGate(wardNeeded)
 }
+
 private fun expectedDamageForProfile(p: AttackProfile, target: TargetConfig, baseSave: Int?): Double {
     val attacks = max(p.models, 0) * max(p.attacks, 0)
     if (attacks == 0) return 0.0
-
     val ph = pHit(p.toHit, if (target.debuffHitEnabled) target.debuffHitValue else 0)
     val pw = pWound(p.toWound)
     val pu = pUnsaved(baseSave, p.rend)
     val ward = wardFactor(target.wardNeeded)
-
     return attacks * ph * pw * pu * p.damage * ward
 }
-private fun expectedDamageAll(units: List<UnitEntry>, target: TargetConfig, baseSave: Int?): Double {
-    var sum = 0.0
-    for (u in units) {
-        if (!u.active) continue
-        for (p in u.profiles) sum += expectedDamageForProfile(p, target, baseSave)
-    }
-    return sum
-}
+
+private fun expectedDamageAll(units: List<UnitEntry>, target: TargetConfig, baseSave: Int?): Double =
+    units.filter { it.active }.flatMap { it.profiles }.sumOf { expectedDamageForProfile(it, target, baseSave) }
 
 // -------------------------
 // App à 3 onglets
@@ -121,7 +115,18 @@ fun SamoHammerApp() {
     var selectedTab by remember { mutableStateOf(0) }
     val tabs = listOf("Profils", "Target", "Simulations")
 
-    var units by remember { mutableStateOf(listOf(UnitEntry(name = "Unité 1"))) }
+    var units by remember {
+        mutableStateOf(
+            listOf(
+                UnitEntry(
+                    name = "Unité 1",
+                    profiles = listOf(
+                        AttackProfile("Profil 1", AttackType.MELEE, models = 1, attacks = 4, toHit = 4, toWound = 4, rend = 1, damage = 1)
+                    )
+                )
+            )
+        )
+    }
     var target by remember { mutableStateOf(TargetConfig()) }
 
     Scaffold(
@@ -134,6 +139,13 @@ fun SamoHammerApp() {
                         text = { Text(title) }
                     )
                 }
+            }
+        },
+        floatingActionButton = {
+            if (selectedTab == 0) {
+                FloatingActionButton(onClick = {
+                    units = units + UnitEntry(name = "Unité ${units.size + 1}")
+                }) { Text("+") }
             }
         }
     ) { inner ->
@@ -148,7 +160,7 @@ fun SamoHammerApp() {
 }
 
 // -------------------------
-// Onglet Profils (nouvelle version)
+// Onglet Profils (édition complète)
 // -------------------------
 @Composable
 fun ProfilesTab(units: List<UnitEntry>, onUpdateUnits: (List<UnitEntry>) -> Unit) {
@@ -301,35 +313,89 @@ private fun NumberField(
 }
 
 // -------------------------
-// Onglet Target (inchangé sauf petite démo d’input)
+// Onglet Target (corrigé, réactif)
 // -------------------------
 @Composable
 fun TargetTab(target: TargetConfig, onUpdate: (TargetConfig) -> Unit) {
-    Column(Modifier.fillMaxSize().padding(16.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
-        Text("Ward : ${if (target.wardNeeded in 2..6) target.wardNeeded.toString() + "+" else "off"}")
-        Row(verticalAlignment = Alignment.CenterVertically) {
-            Text("Debuff Hit : ", modifier = Modifier.padding(end = 8.dp))
+    Column(
+        Modifier
+            .fillMaxSize()
+            .padding(16.dp),
+        verticalArrangement = Arrangement.spacedBy(12.dp)
+    ) {
+        Text("Buffs/Débuffs de la cible", style = MaterialTheme.typography.titleMedium)
+
+        // Ward: 0 (=off) ou 2..6
+        Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+            Text("Ward")
+            var wardTxt by remember { mutableStateOf(if (target.wardNeeded in 2..6) target.wardNeeded.toString() else "") }
             OutlinedTextField(
-                value = if (target.debuffHitEnabled) "-${target.debuffHitValue}" else "off",
-                onValueChange = { /* wiring plus tard */ },
+                value = wardTxt,
+                onValueChange = {
+                    wardTxt = it.filter { ch -> ch.isDigit() }.take(1) // 1 chiffre max (2..6)
+                    val v = wardTxt.toIntOrNull()
+                    onUpdate(target.copy(wardNeeded = if (v != null && v in 2..6) v else 0))
+                },
+                placeholder = { Text("off ou 2..6") },
                 keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
+                singleLine = true,
                 modifier = Modifier.width(120.dp)
             )
+            Text(if (target.wardNeeded in 2..6) "${target.wardNeeded}+" else "off")
         }
+
+        // Debuff to hit (checkbox + valeur 0..3)
+        Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+            Checkbox(
+                checked = target.debuffHitEnabled,
+                onCheckedChange = { onUpdate(target.copy(debuffHitEnabled = it)) }
+            )
+            Text("Debuff to hit")
+            OutlinedTextField(
+                value = target.debuffHitValue.toString(),
+                onValueChange = {
+                    val digits = it.filter { ch -> ch.isDigit() }.take(1)
+                    val v = digits.toIntOrNull() ?: 0
+                    onUpdate(target.copy(debuffHitValue = v.coerceIn(0, 3)))
+                },
+                enabled = target.debuffHitEnabled,
+                keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
+                singleLine = true,
+                modifier = Modifier.width(80.dp)
+            )
+            if (target.debuffHitEnabled) Text("−${target.debuffHitValue} à la touche")
+        }
+
+        Divider()
+
+        // Récap live (contrôle visuel)
+        Text(
+            "Ward: " + (if (target.wardNeeded in 2..6) "${target.wardNeeded}+" else "off") +
+                    " • Debuff hit: " + (if (target.debuffHitEnabled) "-${target.debuffHitValue}" else "off")
+        )
     }
 }
 
 // -------------------------
-// Onglet Simulations (inchangé)
+// Onglet Simulations (réactif)
 // -------------------------
 @Composable
 fun SimulationTab(units: List<UnitEntry>, target: TargetConfig) {
-    Column(Modifier.fillMaxSize().padding(16.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
-        Text("Espérance de dégâts (par sauvegarde) :")
-        for (save in listOf(2,3,4,5,6,null)) {
+    Column(
+        Modifier
+            .fillMaxSize()
+            .padding(16.dp),
+        verticalArrangement = Arrangement.spacedBy(8.dp)
+    ) {
+        Text("Espérance de dégâts (toutes unités actives)", style = MaterialTheme.typography.titleMedium)
+        listOf(2, 3, 4, 5, 6, null).forEach { save ->
             val label = if (save == null) "No Save" else "${save}+"
             val dmg = expectedDamageAll(units, target, save)
-            Text("$label → ${"%.2f".format(dmg)}")
+            Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
+                Text(label)
+                Text(String.format("%.2f", dmg))
+            }
+            Divider()
         }
     }
 }
