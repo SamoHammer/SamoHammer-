@@ -77,7 +77,8 @@ data class AttackProfile(
     val toHit: Int = 4,     // 2..6
     val toWound: Int = 4,   // 2..6
     val rend: Int = 0,      // >= 0 (rend positif = dégrade la save)
-    val damage: Int = 1
+    val damage: Int = 1,
+    val active: Boolean = true // NEW
 )
 
 data class UnitEntry(
@@ -132,7 +133,11 @@ private fun expectedDamageForProfile(p: AttackProfile, target: TargetConfig, bas
 }
 
 private fun expectedDamageAll(units: List<UnitEntry>, target: TargetConfig, baseSave: Int?): Double =
-    units.filter { it.active }.flatMap { it.profiles }.sumOf { expectedDamageForProfile(it, target, baseSave) }
+    units
+        .filter { it.active }
+        .flatMap { it.profiles }
+        .filter { it.active } // NEW: ignore profils inactifs
+        .sumOf { expectedDamageForProfile(it, target, baseSave) }
 
 // -------------------------
 // App à 3 onglets
@@ -156,7 +161,8 @@ fun SamoHammerApp() {
                             toHit = 4,
                             toWound = 4,
                             rend = 1,
-                            damage = 1
+                            damage = 1,
+                            active = true
                         )
                     )
                 )
@@ -253,7 +259,7 @@ fun ProfilesTab(units: List<UnitEntry>, onUpdateUnits: (List<UnitEntry>) -> Unit
                         ) { Text("Supprimer unité") }
                     }
 
-                    // Profils (AVEC suppression individuelle maintenant)
+                    // Profils (activation + suppression individuelle)
                     unit.profiles.forEachIndexed { pIndex, profile ->
                         ProfileEditor(
                             profile = profile,
@@ -270,7 +276,6 @@ fun ProfilesTab(units: List<UnitEntry>, onUpdateUnits: (List<UnitEntry>) -> Unit
                                     units.toMutableList().also { list ->
                                         val newProfiles = unit.profiles.toMutableList().also {
                                             if (it.size > 1) it.removeAt(pIndex)
-                                            // si 1 seul profil, on ignore la suppression (garde-fou MVP)
                                         }
                                         list[unitIndex] = unit.copy(profiles = newProfiles)
                                     }
@@ -293,12 +298,17 @@ private fun ProfileEditor(
     ElevatedCard(modifier = Modifier.fillMaxWidth()) {
         Column(modifier = Modifier.padding(12.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
 
-            // Ligne titre + type + SUPPRIMER PROFIL
+            // Ligne: Active (profil), Nom, Type, Supprimer
             Row(
                 verticalAlignment = Alignment.CenterVertically,
                 horizontalArrangement = Arrangement.spacedBy(12.dp),
                 modifier = Modifier.fillMaxWidth()
             ) {
+                Checkbox(
+                    checked = profile.active,
+                    onCheckedChange = { checked -> onChange(profile.copy(active = checked)) }
+                )
+
                 OutlinedTextField(
                     value = profile.name,
                     onValueChange = { newName -> onChange(profile.copy(name = newName)) },
@@ -316,11 +326,10 @@ private fun ProfileEditor(
                     Text(text = if (profile.attackType == AttackType.MELEE) "Melee" else "Shoot")
                 }
 
-                // NEW: supprimer profil
                 TextButton(onClick = onRemove) { Text("Supprimer profil") }
             }
 
-            // Grille 2 colonnes — paramètres nommés
+            // Grille 2 colonnes — paramètres
             Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
                 Row(
                     horizontalArrangement = Arrangement.spacedBy(12.dp),
