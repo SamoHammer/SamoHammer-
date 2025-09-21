@@ -6,6 +6,10 @@ on:
   pull_request:
     branches: [ "main" ]
 
+concurrency:
+  group: android-ci-${{ github.ref }}
+  cancel-in-progress: true
+
 jobs:
   build:
     runs-on: ubuntu-latest
@@ -29,10 +33,14 @@ jobs:
       - name: Process resources (diagnostic)
         run: ./gradlew :app:processDebugResources --no-daemon --no-build-cache --info --stacktrace --warning-mode all
 
-      # 2) Diagnostic Kotlin — seulement si les ressources passent
+      # 2) Diagnostic Kotlin (ULTRA verbeux) — donnera les lignes "e: fichier:ligne"
       - name: Compile Kotlin (diagnostic)
         if: success()
-        run: ./gradlew :app:compileDebugKotlin --no-daemon --no-build-cache --info --stacktrace --warning-mode all
+        run: ./gradlew :app:compileDebugKotlin \
+             --no-daemon --no-build-cache --rerun-tasks \
+             --info --debug --stacktrace --warning-mode all \
+             -Pkotlin.compiler.execution.strategy=in-process \
+             -Dkotlin.incremental=false
 
       # 3) Build APK si tout est OK
       - name: Build Debug APK
@@ -50,6 +58,7 @@ jobs:
             **/build/tmp/**
             **/build/outputs/logs/**
             **/build/intermediates/**
+            **/build/kotlin/**
 
       # 5) APK (si build OK)
       - name: Upload APK
