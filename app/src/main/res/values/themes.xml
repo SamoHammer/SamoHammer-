@@ -1,4 +1,10 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
-    <!-- Empty on purpose: Compose uses SamoHammerTheme.kt -->
+    <!-- Définition du thème principal utilisé par AndroidManifest -->
+    <style name="Theme.SamoHammer" parent="Theme.MaterialComponents.DayNight.NoActionBar">
+        <!-- Couleurs de base -->
+        <item name="colorPrimary">@android:color/holo_blue_light</item>
+        <item name="colorOnPrimary">@android:color/white</item>
+        <item name="android:statusBarColor">?attr/colorPrimary</item>
+    </style>
 </resources>
