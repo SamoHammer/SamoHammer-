@@ -1,17 +1,19 @@
-
 package com.samohammer.app
 
 import android.os.Bundle
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
 import androidx.compose.foundation.layout.*
-import androidx.compose.foundation.layout.Arrangement
-import androidx.compose.foundation.layout.Row
-import androidx.compose.foundation.layout.weight
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.itemsIndexed
 import androidx.compose.foundation.text.KeyboardOptions
-import androidx.compose.material3.*
+import androidx.compose.material3.ElevatedCard
+import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.OutlinedTextField
+import androidx.compose.material3.Scaffold
+import androidx.compose.material3.Tab
+import androidx.compose.material3.TabRow
+import androidx.compose.material3.Text
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -177,16 +179,29 @@ fun ProfilesTab(units: List<UnitEntry>, onUpdateUnits: (List<UnitEntry>) -> Unit
 // -------------------------
 @Composable
 fun TargetTab(target: TargetConfig, onUpdate: (TargetConfig) -> Unit) {
-    Column(Modifier.fillMaxSize().padding(16.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+    Column(
+        Modifier
+            .fillMaxSize()
+            .padding(16.dp),
+        verticalArrangement = Arrangement.spacedBy(8.dp)
+    ) {
         Text("Ward : ${if (target.wardNeeded in 2..6) target.wardNeeded.toString() + "+" else "off"}")
-        Row(verticalAlignment = Alignment.CenterVertically) {
-            Text("Debuff Hit : ", modifier = Modifier.padding(end = 8.dp))
-            // Exemple d’input avec KeyboardOptions + weight correct
+
+        Row(
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.spacedBy(8.dp),
+            modifier = Modifier.fillMaxWidth()
+        ) {
+            Text("Debuff Hit :")
             OutlinedTextField(
                 value = if (target.debuffHitEnabled) "-${target.debuffHitValue}" else "off",
-                onValueChange = { /* placeholder, on branchera plus tard */ },
-                keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
-                modifier = Modifier.weight(1f)
+                onValueChange = { /* brancher plus tard */ },
+                modifier = Modifier.fillMaxWidth(),
+                keyboardOptions = KeyboardOptions(
+                    keyboardType = KeyboardType.Number,
+                    imeAction = ImeAction.Done
+                ),
+                singleLine = true
             )
         }
     }
@@ -197,9 +212,14 @@ fun TargetTab(target: TargetConfig, onUpdate: (TargetConfig) -> Unit) {
 // -------------------------
 @Composable
 fun SimulationTab(units: List<UnitEntry>, target: TargetConfig) {
-    Column(Modifier.fillMaxSize().padding(16.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
+    Column(
+        Modifier
+            .fillMaxSize()
+            .padding(16.dp),
+        verticalArrangement = Arrangement.spacedBy(12.dp)
+    ) {
         Text("Espérance de dégâts (par sauvegarde) :")
-        for (save in listOf(2,3,4,5,6,null)) {
+        for (save in listOf(2, 3, 4, 5, 6, null)) {
             val label = if (save == null) "No Save" else "${save}+"
             val dmg = expectedDamageAll(units, target, save)
             Text("$label → ${"%.2f".format(dmg)}")
