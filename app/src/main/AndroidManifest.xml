@@ -1,18 +1,17 @@
-<!-- app/src/main/AndroidManifest.xml -->
+<?xml version="1.0" encoding="utf-8"?>
 <manifest xmlns:android="http://schemas.android.com/apk/res/android"
-    xmlns:tools="http://schemas.android.com/tools"
     package="com.samohammer.app">
 
     <application
         android:label="SamoHammer"
         android:icon="@mipmap/ic_launcher"
-        android:theme="@style/Theme.SamoHammer"
-        android:allowBackup="true"
+        android:roundIcon="@mipmap/ic_launcher_round"
+        android:allowBackup="false"
         android:supportsRtl="true"
-        tools:replace="android:label,android:icon,android:theme,android:appComponentFactory">
+        android:theme="@style/Theme.SamoHammer">
 
         <activity
-            android:name="com.samohammer.app.MainActivity"
+            android:name=".MainActivity"
             android:exported="true">
             <intent-filter>
                 <action android:name="android.intent.action.MAIN" />
@@ -21,8 +20,4 @@
         </activity>
 
     </application>
-
-    <uses-sdk
-        android:minSdkVersion="24"
-        android:targetSdkVersion="34" />
 </manifest>
