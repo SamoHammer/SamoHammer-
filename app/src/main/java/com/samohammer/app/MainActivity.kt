@@ -3,11 +3,31 @@ package com.samohammer.app
 import android.os.Bundle
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
-import androidx.compose.foundation.layout.*
+import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.layout.weight
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.itemsIndexed
 import androidx.compose.foundation.text.KeyboardOptions
-import androidx.compose.material3.*
+import androidx.compose.material3.Checkbox
+import androidx.compose.material3.Divider
+import androidx.compose.material3.ElevatedCard
+import androidx.compose.material3.FloatingActionButton
+import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.OutlinedTextField
+import androidx.compose.material3.Scaffold
+import androidx.compose.material3.Tab
+import androidx.compose.material3.TabRow
+import androidx.compose.material3.Text
+import androidx.compose.material3.TextButton
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -59,13 +79,10 @@ data class TargetConfig(
 )
 
 // -------------------------
-// Helpers
+// Moteur
 // -------------------------
 private fun clamp2to6(x: Int) = x.coerceIn(2, 6)
 
-// -------------------------
-// Moteur
-// -------------------------
 private fun pGate(needed: Int): Double = when {
     needed <= 1 -> 1.0
     needed >= 7 -> 0.0
@@ -156,7 +173,7 @@ fun SamoHammerApp() {
 }
 
 // -------------------------
-// Onglet Profils (éditable)
+// Onglet Profils
 // -------------------------
 @Composable
 fun ProfilesTab(units: List<UnitEntry>, onUpdateUnits: (List<UnitEntry>) -> Unit) {
@@ -237,11 +254,7 @@ private fun ProfileEditor(
     onChange: (AttackProfile) -> Unit,
     onRemove: () -> Unit
 ) {
-    Surface(
-        tonalElevation = 1.dp,
-        shape = MaterialTheme.shapes.medium,
-        modifier = Modifier.fillMaxWidth()
-    ) {
+    ElevatedCard(Modifier.fillMaxWidth()) {
         Column(Modifier.padding(12.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
 
             // Ligne titre + type + supprimer
@@ -258,18 +271,19 @@ private fun ProfileEditor(
                     modifier = Modifier.weight(1f)
                 )
 
-                AssistChip(
+                TextButton(
                     onClick = {
                         val next = if (profile.attackType == AttackType.MELEE) AttackType.SHOOT else AttackType.MELEE
                         onChange(profile.copy(attackType = next))
-                    },
-                    label = { Text(if (profile.attackType == AttackType.MELEE) "Melee" else "Shoot") }
-                )
+                    }
+                ) {
+                    Text(if (profile.attackType == AttackType.MELEE) "Melee" else "Shoot")
+                }
 
                 TextButton(onClick = onRemove) { Text("Supprimer") }
             }
 
-            // Grille 2 colonnes (avec GateField2to6 pour Hit/Wound)
+            // Grille 2 colonnes
             Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
                 Row(horizontalArrangement = Arrangement.spacedBy(12.dp), modifier = Modifier.fillMaxWidth()) {
                     NumberField("Models", profile.models, { onChange(profile.copy(models = it.coerceAtLeast(0))) }, Modifier.width(120.dp))
@@ -309,8 +323,7 @@ private fun NumberField(
     )
 }
 
-// Gate 2..6 — on met à jour la valeur **uniquement** si l’entrée est dans l’intervalle.
-// Le texte local reste ce que tape l’utilisateur, donc pas d’“aspiration” vers 2 ou 6.
+// Gate 2..6
 @Composable
 private fun GateField2to6(
     label: String,
@@ -322,12 +335,10 @@ private fun GateField2to6(
     OutlinedTextField(
         value = text,
         onValueChange = { raw ->
-            val digits = raw.filter { it.isDigit() }.take(1) // un seul chiffre
+            val digits = raw.filter { it.isDigit() }.take(1)
             text = digits
             val v = digits.toIntOrNull()
-            if (v != null && v in 2..6) {
-                onValue(v) // on ne pousse l’état que si c’est dans [2..6]
-            }
+            if (v != null && v in 2..6) onValue(v)
         },
         label = { Text(label) },
         placeholder = { Text("2..6") },
@@ -338,7 +349,7 @@ private fun GateField2to6(
 }
 
 // -------------------------
-// Onglet Target (resync Ward + contrôle Debuff)
+// Onglet Target
 // -------------------------
 @Composable
 fun TargetTab(target: TargetConfig, onUpdate: (TargetConfig) -> Unit) {
@@ -350,7 +361,7 @@ fun TargetTab(target: TargetConfig, onUpdate: (TargetConfig) -> Unit) {
     ) {
         Text("Buffs/Débuffs de la cible", style = MaterialTheme.typography.titleMedium)
 
-        // Ward (0=off ou 2..6) — resynchronisé quand target change
+        // Ward (0=off ou 2..6)
         Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
             Text("Ward")
             var wardTxt by remember(target.wardNeeded) {
