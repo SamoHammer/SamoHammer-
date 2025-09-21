@@ -3,7 +3,7 @@ package com.samohammer.app
 import android.os.Bundle
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
-import androidx.compose.foundation.layout.*   // gère Row, Column, Spacer, Arrangement, weight
+import androidx.compose.foundation.layout.*   // Row/Column/Spacer/weight...
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.itemsIndexed
 import androidx.compose.foundation.text.KeyboardOptions
@@ -11,9 +11,8 @@ import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.unit.dp
-import androidx.compose.ui.text.input.ImeAction
 import androidx.compose.ui.text.input.KeyboardType
+import androidx.compose.ui.unit.dp
 import com.samohammer.app.ui.theme.SamoHammerTheme
 import kotlin.math.max
 
@@ -316,7 +315,7 @@ private fun GateField2to6(
     OutlinedTextField(
         value = text,
         onValueChange = { raw ->
-            val digits = raw.filter { it.isDigit() }.take(1)
+            val digits = raw.filter { ch -> ch.isDigit() }.take(1)
             text = digits
             val v = digits.toIntOrNull()
             if (v != null && v in 2..6) onValue(v)
@@ -330,7 +329,7 @@ private fun GateField2to6(
 }
 
 // -------------------------
-// Onglet Target
+// Onglet Target (corrigé: lambdas nommées)
 // -------------------------
 @Composable
 fun TargetTab(target: TargetConfig, onUpdate: (TargetConfig) -> Unit) {
@@ -350,8 +349,8 @@ fun TargetTab(target: TargetConfig, onUpdate: (TargetConfig) -> Unit) {
             }
             OutlinedTextField(
                 value = wardTxt,
-                onValueChange = {
-                    val digits = it.filter { ch -> ch.isDigit() }.take(1)
+                onValueChange = { newText ->
+                    val digits = newText.filter { ch -> ch.isDigit() }.take(1)
                     wardTxt = digits
                     val v = digits.toIntOrNull()
                     onUpdate(target.copy(wardNeeded = if (v != null && v in 2..6) v else 0))
@@ -375,8 +374,8 @@ fun TargetTab(target: TargetConfig, onUpdate: (TargetConfig) -> Unit) {
             Text("Debuff to hit")
             OutlinedTextField(
                 value = target.debuffHitValue.toString(),
-                onValueChange = {
-                    val digits = it.filter { ch -> ch.isDigit() }.take(1)
+                onValueChange = { newText ->
+                    val digits = newText.filter { ch -> ch.isDigit() }.take(1)
                     val v = digits.toIntOrNull() ?: 0
                     onUpdate(target.copy(debuffHitValue = v.coerceIn(0, 3)))
                 },
