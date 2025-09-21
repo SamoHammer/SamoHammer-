@@ -21,10 +21,30 @@ jobs:
       - name: Grant execute permission for gradlew
         run: chmod +x gradlew
 
-      - name: Build Debug APK (no tests)
-        run: ./gradlew assembleDebug --stacktrace
+      # Étape 1 : compilation Kotlin seule, en mode verbeux, pour récupérer l'erreur précise
+      - name: Compile Kotlin (diagnostic)
+        run: ./gradlew :app:compileDebugKotlin --no-daemon --info --stacktrace --warning-mode all
 
+      # Étape 2 : build complet APK si la compilation Kotlin passe
+      - name: Build Debug APK
+        if: success()
+        run: ./gradlew assembleDebug --no-daemon --stacktrace
+
+      # Logs & rapports utiles (toujours uploadés même en cas d'échec)
+      - name: Upload build reports
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: gradle-reports
+          path: |
+            **/build/reports/**
+            **/build/tmp/**
+            **/build/outputs/logs/**
+            **/build/kotlin/**
+
+      # APK (uniquement si build OK)
       - name: Upload APK
+        if: success()
         uses: actions/upload-artifact@v4
         with:
           name: SamoHammer-debug
