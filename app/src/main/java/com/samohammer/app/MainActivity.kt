@@ -1,5 +1,6 @@
 package com.samohammer.app
-
+import com.samohammer.app.ui.theme.SamoTokens
+import com.samohammer.app.ui.theme.SamoHammerTheme
 import android.os.Bundle
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
