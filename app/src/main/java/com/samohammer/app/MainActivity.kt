@@ -2,7 +2,6 @@
 // Base: V1.2.4 (logique inchangée), uniquement hygiène et petits ajustements UI.
 
 package com.samohammer.app
-
 import android.os.Bundle
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
@@ -13,14 +12,12 @@ import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
-import androidx.compose.foundation.layout.PaddingValues
-import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.width
-import androidx.compose.foundation.layout.weight
+import androidx.compose.foundation.layout.PaddingValues
 
 // Lists
 import androidx.compose.foundation.lazy.LazyColumn
@@ -60,7 +57,7 @@ import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.unit.dp
 
 import com.samohammer.app.ui.theme.SamoHammerTheme
-import kotlin.math.max
+
 
 // -------------------------
 // Activity
