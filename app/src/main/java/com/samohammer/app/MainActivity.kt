@@ -1,4 +1,4 @@
-// V1.2.1
+// V1.2.2
 
 package com.samohammer.app
 
@@ -51,8 +51,6 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.unit.dp
-
-// Icônes (Material Icons)
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.ExpandMore
 import androidx.compose.material.icons.filled.KeyboardArrowRight
@@ -88,11 +86,11 @@ data class AttackProfile(
     val toWound: Int = 4,   // 2..6
     val rend: Int = 0,      // >= 0 (rend positif = dégrade la save)
     val damage: Int = 1,
-    // Crits
-    val critTrigger: Int = 6,           // 2..6 (naturel)
-    val critTwoHits: Boolean = false,   // Crit 2 hits
-    val critAutoWound: Boolean = false, // Crit auto wound
-    val critMortal: Boolean = false,    // Crit mortal
+    // Crits (paramétrage UI retiré ; seuil fixé à 6 côté modèle)
+    val critTrigger: Int = 6,
+    val critTwoHits: Boolean = false,
+    val critAutoWound: Boolean = false,
+    val critMortal: Boolean = false,
     // UI
     val active: Boolean = true,
     val expanded: Boolean = true
@@ -144,10 +142,9 @@ private fun wardFactor(wardNeeded: Int): Double {
 
 /**
  * EV pour un profil, avec Crits (priorité : Mortal > AutoWound > TwoHits).
- * Rappels :
- * - Déclencheur = résultat naturel (non modifié).
- * - Crits uniquement On-Hit.
- * - Un critique compte comme une touche réussie.
+ * - Déclencheur = résultat naturel (non modifié) — ici fixé à 6.
+ * - Crits uniquement "On Hit".
+ * - Crits ⊆ Hits (un critique compte comme une touche réussie).
  */
 private fun expectedDamageForProfile(
     p: AttackProfile,
@@ -161,13 +158,15 @@ private fun expectedDamageForProfile(
     val effToHit = clamp2to6(p.toHit + debuff)
     val pHit = pHitEffective(p.toHit, debuff)
 
-    // proba que le jet naturel == trigger ET valide la touche (trigger >= seuil effectif)
-    val pCrit = if (p.critTrigger in 2..6 && p.critTrigger >= effToHit) (1.0 / 6.0) else 0.0
+    // Seuil de crit fixé à 6 natif
+    val critTrigger = 6
+    val pCrit = if (critTrigger >= effToHit) (1.0 / 6.0) else 0.0
 
     val pW = pWound(p.toWound)
     val pU = pUnsaved(baseSave, p.rend)
     val wF = wardFactor(target.wardNeeded)
 
+    // Priorité des modes
     val useMortal = p.critMortal
     val useAuto = !useMortal && p.critAutoWound
     val useTwoHits = !useMortal && !useAuto && p.critTwoHits
@@ -177,21 +176,18 @@ private fun expectedDamageForProfile(
 
     return when {
         useMortal -> {
-            // Crit → mortels (ignore la save), ward seulement
             val normals = (expHits - expCrits).coerceAtLeast(0.0)
             val normalUnsaved = normals * pW * pU
             val mortalDamage = expCrits * p.damage * wF
             (normalUnsaved * p.damage + mortalDamage)
         }
         useAuto -> {
-            // Crit → auto-wound (save s’applique)
             val normals = (expHits - expCrits).coerceAtLeast(0.0)
             val normalUnsaved = normals * pW * pU
             val autoUnsaved = expCrits * pU
             (normalUnsaved + autoUnsaved) * p.damage * wF
         }
         useTwoHits -> {
-            // Crit → +1 jet de blessure
             val extraWoundRolls = expCrits
             val woundRolls = (expHits + extraWoundRolls) * pW
             val unsaved = woundRolls * pU
@@ -208,11 +204,6 @@ private fun expectedDamageAll(units: List<UnitEntry>, target: TargetConfig, base
     units.filter { it.active }
         .flatMap { it.profiles.filter { pr -> pr.active } }
         .sumOf { expectedDamageForProfile(it, target, baseSave) }
-
-// NEW: EV par unité (pour SimulationTab par unité)
-private fun expectedDamageForUnit(unit: UnitEntry, target: TargetConfig, baseSave: Int?): Double =
-    if (!unit.active) 0.0
-    else unit.profiles.filter { it.active }.sumOf { expectedDamageForProfile(it, target, baseSave) }
 
 // -------------------------
 // App à 3 onglets
@@ -290,10 +281,9 @@ fun ProfilesTab(units: List<UnitEntry>, onUpdateUnits: (List<UnitEntry>) -> Unit
             ElevatedCard {
                 Column(modifier = Modifier.padding(12.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
 
-                    // Header Unité (chevron à droite)
+                    // Header Unité : champ + actions alignées + chevron tout à droite
                     Row(
                         verticalAlignment = Alignment.CenterVertically,
-                        horizontalArrangement = Arrangement.spacedBy(12.dp),
                         modifier = Modifier.fillMaxWidth()
                     ) {
                         Checkbox(
@@ -313,6 +303,8 @@ fun ProfilesTab(units: List<UnitEntry>, onUpdateUnits: (List<UnitEntry>) -> Unit
                             modifier = Modifier.weight(1f)
                         )
 
+                        Spacer(Modifier.width(8.dp))
+
                         TextButton(
                             onClick = {
                                 onUpdateUnits(
@@ -324,11 +316,15 @@ fun ProfilesTab(units: List<UnitEntry>, onUpdateUnits: (List<UnitEntry>) -> Unit
                             }
                         ) { Text("Ajouter profil") }
 
+                        Spacer(Modifier.width(8.dp))
+
                         TextButton(
                             onClick = {
                                 onUpdateUnits(units.toMutableList().also { it.removeAt(unitIndex) })
                             }
                         ) { Text("Supprimer unité") }
+
+                        Spacer(Modifier.width(8.dp))
 
                         IconButton(onClick = {
                             onUpdateUnits(units.toMutableList().also { it[unitIndex] = unit.copy(expanded = !unit.expanded) })
@@ -380,10 +376,9 @@ private fun ProfileEditor(
     ElevatedCard(modifier = Modifier.fillMaxWidth()) {
         Column(modifier = Modifier.padding(12.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
 
-            // Ligne titre + type + actions + chevron
+            // Ligne titre + type + actions + chevron aligné à droite
             Row(
                 verticalAlignment = Alignment.CenterVertically,
-                horizontalArrangement = Arrangement.spacedBy(12.dp),
                 modifier = Modifier.fillMaxWidth()
             ) {
                 Checkbox(
@@ -399,6 +394,8 @@ private fun ProfileEditor(
                     modifier = Modifier.weight(1f)
                 )
 
+                Spacer(Modifier.width(8.dp))
+
                 TextButton(
                     onClick = {
                         val next = if (profile.attackType == AttackType.MELEE) AttackType.SHOOT else AttackType.MELEE
@@ -408,7 +405,11 @@ private fun ProfileEditor(
                     Text(text = if (profile.attackType == AttackType.MELEE) "Melee" else "Shoot")
                 }
 
+                Spacer(Modifier.width(8.dp))
+
                 TextButton(onClick = onRemove) { Text("Supprimer profil") }
+
+                Spacer(Modifier.width(8.dp))
 
                 IconButton(onClick = { onChange(profile.copy(expanded = !profile.expanded)) }) {
                     Icon(
@@ -419,7 +420,6 @@ private fun ProfileEditor(
             }
 
             if (profile.expanded) {
-                // Paramètres
                 Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
                     Row(horizontalArrangement = Arrangement.spacedBy(12.dp), modifier = Modifier.fillMaxWidth()) {
                         NumberField(
@@ -465,41 +465,7 @@ private fun ProfileEditor(
                     }
 
                     Divider()
-
-                    // CRITS
-                    Row(
-                        verticalAlignment = Alignment.CenterVertically,
-                        horizontalArrangement = Arrangement.spacedBy(12.dp),
-                        modifier = Modifier.fillMaxWidth()
-                    ) {
-                        GateField2to6(
-                            label = "Crit trigger (2..6)",
-                            value = profile.critTrigger,
-                            onValue = { v -> onChange(profile.copy(critTrigger = v)) },
-                            modifier = Modifier.width(140.dp)
-                        )
-                        Spacer(Modifier.width(8.dp))
-                        Checkbox(
-                            checked = profile.critTwoHits,
-                            onCheckedChange = { onChange(profile.copy(critTwoHits = it)) }
-                        )
-                        Text("Crit 2 hits")
-                        Checkbox(
-                            checked = profile.critAutoWound,
-                            onCheckedChange = { onChange(profile.copy(critAutoWound = it)) }
-                        )
-                        Text("Crit Auto-Wound")
-                        Checkbox(
-                            checked = profile.critMortal,
-                            onCheckedChange = { onChange(profile.copy(critMortal = it)) }
-                        )
-                        Text("Crit Mortal")
-                    }
-
-                    Text(
-                        text = "Si plusieurs sont cochés : priorité Mortal > Auto-Wound > Two Hits.",
-                        style = MaterialTheme.typography.bodySmall
-                    )
+                    // Section CRITS retirée (seuil fixé à 6; pas d'UI pour l’instant)
                 }
             }
         }
@@ -621,7 +587,7 @@ fun TargetTab(target: TargetConfig, onUpdate: (TargetConfig) -> Unit) {
 }
 
 // -------------------------
-// Onglet Simulations (par unité active)
+// Onglet Simulations
 // -------------------------
 @Composable
 fun SimulationTab(units: List<UnitEntry>, target: TargetConfig) {
@@ -629,27 +595,18 @@ fun SimulationTab(units: List<UnitEntry>, target: TargetConfig) {
         modifier = Modifier
             .fillMaxSize()
             .padding(16.dp),
-        verticalArrangement = Arrangement.spacedBy(16.dp)
+        verticalArrangement = Arrangement.spacedBy(8.dp)
     ) {
-        Text("Espérance de dégâts (par unité active)", style = MaterialTheme.typography.titleMedium)
-
-        units.filter { it.active }.forEach { unit ->
-            Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                Text(unit.name, style = MaterialTheme.typography.titleSmall)
-                val saves = listOf(2, 3, 4, 5, 6, null)
-                saves.forEach { save ->
-                    val label = if (save == null) "No Save" else "${save}+"
-                    val dmg = expectedDamageForUnit(unit, target, save)
-                    Row(
-                        modifier = Modifier.fillMaxWidth(),
-                        horizontalArrangement = Arrangement.SpaceBetween
-                    ) {
-                        Text(label)
-                        Text(String.format("%.2f", dmg))
-                    }
-                    Divider()
-                }
+        Text("Espérance de dégâts (toutes unités/profils actifs)", style = MaterialTheme.typography.titleMedium)
+        val saves = listOf(2, 3, 4, 5, 6, null)
+        saves.forEach { save ->
+            val label = if (save == null) "No Save" else "${save}+"
+            val dmg = expectedDamageAll(units, target, save)
+            Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
+                Text(label)
+                Text(String.format("%.2f", dmg))
             }
+            Divider()
         }
     }
 }
