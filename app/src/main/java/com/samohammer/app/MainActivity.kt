@@ -1,4 +1,5 @@
-// V1.0.1 — élargit les en-têtes : cartes d’unité en full width + imports explicites
+// V1.0.2 — enlève Modifier.weight (source probable du build fail) et
+// met les boutons d’action sur une ligne dédiée. Champs de nom en full width.
 
 package com.samohammer.app
 
@@ -15,7 +16,6 @@ import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.width
-import androidx.compose.foundation.layout.weight
 
 // Lists
 import androidx.compose.foundation.lazy.LazyColumn
@@ -194,13 +194,13 @@ fun ProfilesTab(units: List<UnitEntry>, onUpdateUnits: (List<UnitEntry>) -> Unit
         verticalArrangement = Arrangement.spacedBy(12.dp)
     ) {
         itemsIndexed(units) { unitIndex, unit ->
-            // 🔧 clé du fix : la carte d’UNITE prend toute la largeur
+            // Carte UNITE en pleine largeur
             ElevatedCard(modifier = Modifier.fillMaxWidth()) {
                 Column(
                     modifier = Modifier.padding(12.dp),
                     verticalArrangement = Arrangement.spacedBy(12.dp)
                 ) {
-                    // En-tête unité (checkbox + nom extensible + boutons à droite)
+                    // Ligne 1 : checkbox + NOM (plein largeur)
                     Row(
                         verticalAlignment = Alignment.CenterVertically,
                         horizontalArrangement = Arrangement.spacedBy(12.dp),
@@ -223,26 +223,31 @@ fun ProfilesTab(units: List<UnitEntry>, onUpdateUnits: (List<UnitEntry>) -> Unit
                             },
                             label = { Text("Nom de l’unité") },
                             singleLine = true,
-                            modifier = Modifier.weight(1f)
+                            modifier = Modifier.fillMaxWidth()
                         )
-                        Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                            TextButton(
-                                onClick = {
-                                    onUpdateUnits(
-                                        units.toMutableList().also { list ->
-                                            val newProfiles = unit.profiles + AttackProfile(name = "Profil ${unit.profiles.size + 1}")
-                                            list[unitIndex] = unit.copy(profiles = newProfiles)
-                                        }
-                                    )
-                                }
-                            ) { Text("Ajouter profil") }
+                    }
 
-                            TextButton(
-                                onClick = {
-                                    onUpdateUnits(units.toMutableList().also { it.removeAt(unitIndex) })
-                                }
-                            ) { Text("Supprimer unité") }
-                        }
+                    // Ligne 2 : actions (sur toute la largeur, pas de squeeze)
+                    Row(
+                        horizontalArrangement = Arrangement.spacedBy(12.dp),
+                        modifier = Modifier.fillMaxWidth()
+                    ) {
+                        TextButton(
+                            onClick = {
+                                onUpdateUnits(
+                                    units.toMutableList().also { list ->
+                                        val newProfiles = unit.profiles + AttackProfile(name = "Profil ${unit.profiles.size + 1}")
+                                        list[unitIndex] = unit.copy(profiles = newProfiles)
+                                    }
+                                )
+                            }
+                        ) { Text("Ajouter profil") }
+
+                        TextButton(
+                            onClick = {
+                                onUpdateUnits(units.toMutableList().also { it.removeAt(unitIndex) })
+                            }
+                        ) { Text("Supprimer unité") }
                     }
 
                     // Profils
@@ -283,7 +288,8 @@ private fun ProfileEditor(
 ) {
     ElevatedCard(modifier = Modifier.fillMaxWidth()) {
         Column(modifier = Modifier.padding(12.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
-            // En-tête profil
+
+            // Ligne 1 : checkbox + NOM (plein largeur)
             Row(
                 verticalAlignment = Alignment.CenterVertically,
                 horizontalArrangement = Arrangement.spacedBy(12.dp),
@@ -298,18 +304,23 @@ private fun ProfileEditor(
                     onValueChange = { newName -> onChange(profile.copy(name = newName)) },
                     label = { Text("Nom du profil") },
                     singleLine = true,
-                    modifier = Modifier.weight(1f)
+                    modifier = Modifier.fillMaxWidth()
                 )
-                Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                    TextButton(
-                        onClick = {
-                            val next = if (profile.attackType == AttackType.MELEE) AttackType.SHOOT else AttackType.MELEE
-                            onChange(profile.copy(attackType = next))
-                        }
-                    ) { Text(if (profile.attackType == AttackType.MELEE) "Melee" else "Shoot") }
+            }
 
-                    TextButton(onClick = onRemove) { Text("Supprimer profil") }
-                }
+            // Ligne 2 : actions du profil
+            Row(
+                horizontalArrangement = Arrangement.spacedBy(12.dp),
+                modifier = Modifier.fillMaxWidth()
+            ) {
+                TextButton(
+                    onClick = {
+                        val next = if (profile.attackType == AttackType.MELEE) AttackType.SHOOT else AttackType.MELEE
+                        onChange(profile.copy(attackType = next))
+                    }
+                ) { Text(if (profile.attackType == AttackType.MELEE) "Melee" else "Shoot") }
+
+                TextButton(onClick = onRemove) { Text("Supprimer profil") }
             }
 
             // Grille de champs
