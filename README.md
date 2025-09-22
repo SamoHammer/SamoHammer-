@@ -1,2 +1,2 @@
 # SamoHammer-
-Android App for stat
+Android App for stat and shit
