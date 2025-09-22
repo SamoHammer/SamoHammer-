@@ -1,11 +1,26 @@
-// V1.2.3 — Simulation agrégée par unité + limite 6 unités actives + "Models" -> "Size"
+// V1.2.2 — Stable base + Simu en colonnes par unité (max 6 actives)
+// - Chevrons texte (pas d'icônes) pour éviter les soucis d’import.
+// - Libellés courts: Size / Atk / Hit / Wnd / Rend / Dmg.
+// - Champs compacts (~90dp).
+// - "Add Profile" aligné à gauche.
+// - Simulation: 1 tableau, lignes = saves (2+,3+,4+,5+,6+,No Save), colonnes = unités actives (max 6).
+
+package com.samohammer.app
+
+import android.os.Bundle
+import androidx.activity.ComponentActivity
+import androidx.activity.compose.setContent
+
 // Layout
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.width
 
@@ -13,7 +28,7 @@ import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.itemsIndexed
 
-// TextField options
+// TextField
 import androidx.compose.foundation.text.KeyboardOptions
 
 // Material3
@@ -43,17 +58,8 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.unit.dp
 
-// Icons (corrigé ✅)
-import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.ExpandMore
-import androidx.compose.material.icons.filled.KeyboardArrowRight
-
-// Theme
 import com.samohammer.app.ui.theme.SamoHammerTheme
-
-// Utils
 import kotlin.math.max
-
 
 // -------------------------
 // Activity
@@ -75,21 +81,21 @@ class MainActivity : ComponentActivity() {
 enum class AttackType { MELEE, SHOOT }
 
 data class AttackProfile(
-    val name: String = "Profil",
+    val name: String = "Weapon Profile",
     val attackType: AttackType = AttackType.MELEE,
-    val models: Int = 1,
-    val attacks: Int = 1,
-    val toHit: Int = 4,     // 2..6
-    val toWound: Int = 4,   // 2..6
-    val rend: Int = 0,      // >= 0
-    val damage: Int = 1,
+    val models: Int = 1,     // "Size"
+    val attacks: Int = 1,    // "Atk"
+    val toHit: Int = 4,      // "Hit"  2..6
+    val toWound: Int = 4,    // "Wnd"  2..6
+    val rend: Int = 0,       // "Rend" >= 0
+    val damage: Int = 1,     // "Dmg"
     val active: Boolean = true
 )
 
 data class UnitEntry(
-    val name: String = "Nouvelle unité",
+    val name: String = "Unit",
     val active: Boolean = true,
-    val profiles: List<AttackProfile> = listOf(AttackProfile(name = "Profil 1"))
+    val profiles: List<AttackProfile> = listOf(AttackProfile(name = "Weapon Profile"))
 )
 
 data class TargetConfig(
@@ -138,8 +144,13 @@ private fun expectedDamageForProfile(p: AttackProfile, target: TargetConfig, bas
     return attacks * ph * pw * pu * p.damage * ward
 }
 
-private fun expectedDamageForUnit(unit: UnitEntry, target: TargetConfig, baseSave: Int?): Double =
-    if (!unit.active) 0.0 else unit.profiles.sumOf { expectedDamageForProfile(it, target, baseSave) }
+private fun expectedDamageForUnit(u: UnitEntry, target: TargetConfig, baseSave: Int?): Double {
+    if (!u.active) return 0.0
+    return u.profiles.sumOf { expectedDamageForProfile(it, target, baseSave) }
+}
+
+private fun expectedDamageAll(units: List<UnitEntry>, target: TargetConfig, baseSave: Int?): Double =
+    units.filter { it.active }.sumOf { expectedDamageForUnit(it, target, baseSave) }
 
 // -------------------------
 // App à 3 onglets
@@ -153,10 +164,10 @@ fun SamoHammerApp() {
         mutableStateOf(
             listOf(
                 UnitEntry(
-                    name = "Unité 1",
+                    name = "Unit 1",
                     profiles = listOf(
                         AttackProfile(
-                            name = "Profil 1",
+                            name = "Weapon Profile",
                             attackType = AttackType.MELEE,
                             models = 1,
                             attacks = 4,
@@ -187,7 +198,7 @@ fun SamoHammerApp() {
         floatingActionButton = {
             if (selectedTab == 0) {
                 FloatingActionButton(onClick = {
-                    units = units + UnitEntry(name = "Unité ${units.size + 1}")
+                    units = units + UnitEntry(name = "Unit ${units.size + 1}")
                 }) { Text("+") }
             }
         }
@@ -207,8 +218,6 @@ fun SamoHammerApp() {
 // -------------------------
 @Composable
 fun ProfilesTab(units: List<UnitEntry>, onUpdateUnits: (List<UnitEntry>) -> Unit) {
-    val activeCount = units.count { it.active }
-
     LazyColumn(
         modifier = Modifier
             .fillMaxSize()
@@ -231,15 +240,11 @@ fun ProfilesTab(units: List<UnitEntry>, onUpdateUnits: (List<UnitEntry>) -> Unit
                         horizontalArrangement = Arrangement.spacedBy(12.dp),
                         modifier = Modifier.fillMaxWidth()
                     ) {
-                        val currentActive = units.count { it.active } - if (unit.active) 1 else 0
                         Checkbox(
                             checked = unit.active,
                             onCheckedChange = { checked ->
-                                // Limite : max 6 unités actives
-                                val canEnable = !(checked && currentActive >= 6)
-                                val newActive = if (canEnable) checked else unit.active
                                 onUpdateUnits(
-                                    units.toMutableList().also { it[unitIndex] = unit.copy(active = newActive) }
+                                    units.toMutableList().also { it[unitIndex] = unit.copy(active = checked) }
                                 )
                             }
                         )
@@ -259,10 +264,10 @@ fun ProfilesTab(units: List<UnitEntry>, onUpdateUnits: (List<UnitEntry>) -> Unit
                         }
                     }
 
-                    // LIGNE 2 : actions (Add Profile à gauche, Delete à droite)
+                    // LIGNE 2 : actions (à gauche)
                     Row(
                         modifier = Modifier.fillMaxWidth(),
-                        horizontalArrangement = Arrangement.SpaceBetween,
+                        horizontalArrangement = Arrangement.Start,
                         verticalAlignment = Alignment.CenterVertically
                     ) {
                         TextButton(
@@ -270,12 +275,14 @@ fun ProfilesTab(units: List<UnitEntry>, onUpdateUnits: (List<UnitEntry>) -> Unit
                                 onUpdateUnits(
                                     units.toMutableList().also { list ->
                                         val newProfiles =
-                                            unit.profiles + AttackProfile(name = "Profil ${unit.profiles.size + 1}")
+                                            unit.profiles + AttackProfile(name = "Weapon Profile")
                                         list[unitIndex] = unit.copy(profiles = newProfiles)
                                     }
                                 )
                             }
                         ) { Text("Add Profile") }
+
+                        Spacer(Modifier.width(12.dp))
 
                         TextButton(
                             onClick = {
@@ -309,15 +316,6 @@ fun ProfilesTab(units: List<UnitEntry>, onUpdateUnits: (List<UnitEntry>) -> Unit
                                 }
                             )
                         }
-                    }
-
-                    // Aide visuelle si limite atteinte
-                    if (activeCount >= 6) {
-                        Text(
-                            "Max 6 active units.",
-                            style = MaterialTheme.typography.bodySmall,
-                            color = MaterialTheme.colorScheme.error
-                        )
                     }
                 }
             }
@@ -370,16 +368,16 @@ private fun ProfileEditor(
                 }
             }
 
-            // LIGNE 2 : action (à droite)
+            // LIGNE 2 : action (à gauche)
             Row(
                 modifier = Modifier.fillMaxWidth(),
-                horizontalArrangement = Arrangement.End
+                horizontalArrangement = Arrangement.Start
             ) {
                 TextButton(onClick = onRemove) { Text("Delete") }
             }
 
             if (expanded) {
-                // Grille de champs (format compact)
+                // Grille de champs (compacts)
                 Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
                     Row(
                         horizontalArrangement = Arrangement.spacedBy(12.dp),
@@ -389,13 +387,13 @@ private fun ProfileEditor(
                             label = "Size",
                             value = profile.models,
                             onValue = { v -> onChange(profile.copy(models = v.coerceAtLeast(0))) },
-                            modifier = Modifier.width(60.dp)
+                            modifier = Modifier.width(90.dp)
                         )
                         NumberField(
                             label = "Atk",
                             value = profile.attacks,
                             onValue = { v -> onChange(profile.copy(attacks = v.coerceAtLeast(0))) },
-                            modifier = Modifier.width(60.dp)
+                            modifier = Modifier.width(90.dp)
                         )
                     }
                     Row(
@@ -406,13 +404,13 @@ private fun ProfileEditor(
                             label = "Hit",
                             value = profile.toHit,
                             onValue = { v -> onChange(profile.copy(toHit = v)) },
-                            modifier = Modifier.width(60.dp)
+                            modifier = Modifier.width(90.dp)
                         )
                         GateField2to6(
                             label = "Wnd",
                             value = profile.toWound,
                             onValue = { v -> onChange(profile.copy(toWound = v)) },
-                            modifier = Modifier.width(60.dp)
+                            modifier = Modifier.width(90.dp)
                         )
                     }
                     Row(
@@ -423,13 +421,13 @@ private fun ProfileEditor(
                             label = "Rend",
                             value = profile.rend,
                             onValue = { v -> onChange(profile.copy(rend = v.coerceAtLeast(0))) },
-                            modifier = Modifier.width(60.dp)
+                            modifier = Modifier.width(90.dp)
                         )
                         NumberField(
                             label = "Dmg",
                             value = profile.damage,
                             onValue = { v -> onChange(profile.copy(damage = v.coerceAtLeast(0))) },
-                            modifier = Modifier.width(60.dp)
+                            modifier = Modifier.width(90.dp)
                         )
                     }
                 }
@@ -494,7 +492,7 @@ fun TargetTab(target: TargetConfig, onUpdate: (TargetConfig) -> Unit) {
             .padding(16.dp),
         verticalArrangement = Arrangement.spacedBy(12.dp)
     ) {
-        Text("Buffs/Débuffs de la cible", style = MaterialTheme.typography.titleMedium)
+        Text("Target buffs/debuffs", style = MaterialTheme.typography.titleMedium)
 
         // Ward (0=off ou 2..6)
         Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
@@ -510,10 +508,10 @@ fun TargetTab(target: TargetConfig, onUpdate: (TargetConfig) -> Unit) {
                     val v = digits.toIntOrNull()
                     onUpdate(target.copy(wardNeeded = if (v != null && v in 2..6) v else 0))
                 },
-                placeholder = { Text("off ou 2..6") },
+                placeholder = { Text("off or 2..6") },
                 keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
                 singleLine = true,
-                modifier = Modifier.width(120.dp)
+                modifier = Modifier.width(100.dp)
             )
             Text(text = if (target.wardNeeded in 2..6) "${target.wardNeeded}+" else "off")
         }
@@ -539,7 +537,7 @@ fun TargetTab(target: TargetConfig, onUpdate: (TargetConfig) -> Unit) {
                 singleLine = true,
                 modifier = Modifier.width(80.dp)
             )
-            if (target.debuffHitEnabled) Text("−${target.debuffHitValue} à la touche")
+            if (target.debuffHitEnabled) Text("−${target.debuffHitValue} to Hit")
         }
 
         Divider()
@@ -552,64 +550,65 @@ fun TargetTab(target: TargetConfig, onUpdate: (TargetConfig) -> Unit) {
 }
 
 // -------------------------
-// Onglet Simulations — Tableau agrégé
+// Onglet Simulations
 // -------------------------
 @Composable
 fun SimulationTab(units: List<UnitEntry>, target: TargetConfig) {
-    val activeUnits = units.filter { it.active }.take(6) // hard cap 6 colonnes max
-    if (activeUnits.isEmpty()) {
-        Column(
-            modifier = Modifier
-                .fillMaxSize()
-                .padding(16.dp),
-            verticalArrangement = Arrangement.Center,
-            horizontalAlignment = Alignment.CenterHorizontally
-        ) {
-            Text("Aucune unité active.")
-        }
-        return
-    }
-
-    val saves = listOf(2, 3, 4, 5, 6, null)
-
-    ElevatedCard(
+    val activeUnits = units.filter { it.active }.take(6)
+    Column(
         modifier = Modifier
             .fillMaxSize()
-            .padding(12.dp)
+            .padding(16.dp),
+        verticalArrangement = Arrangement.spacedBy(8.dp)
     ) {
-        Column(modifier = Modifier.padding(12.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
-            // Header
-            Row(modifier = Modifier.fillMaxWidth()) {
-                // Colonne Save (fixe)
-                Text("Save", modifier = Modifier.width(64.dp))
-                // Colonnes par unité (réparties)
-                activeUnits.forEach { unit ->
-                    Text(
-                        unit.name,
-                        maxLines = 1,
-                        overflow = TextOverflow.Ellipsis,
-                        modifier = Modifier.weight(1f)
-                    )
+        Text(
+            "Damage expectation by Save (per active unit, max 6)",
+            style = MaterialTheme.typography.titleMedium
+        )
+
+        if (activeUnits.isEmpty()) {
+            Spacer(Modifier.height(8.dp))
+            Text("No active unit.")
+            return@Column
+        }
+
+        // Header row
+        Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(12.dp)) {
+            Text("Save", modifier = Modifier.width(70.dp))
+            activeUnits.forEach { u ->
+                Text(
+                    u.name,
+                    modifier = Modifier.weight(1f),
+                    maxLines = 1
+                )
+            }
+        }
+        Divider()
+
+        val saves = listOf<Int?>(2, 3, 4, 5, 6, null)
+        saves.forEach { save ->
+            Row(
+                modifier = Modifier
+                    .fillMaxWidth(),
+                horizontalArrangement = Arrangement.spacedBy(12.dp)
+            ) {
+                val label = if (save == null) "No Save" else "${save}+"
+                Text(label, modifier = Modifier.width(70.dp))
+
+                activeUnits.forEach { u ->
+                    val dmg = expectedDamageForUnit(u, target, save)
+                    Text(String.format("%.2f", dmg), modifier = Modifier.weight(1f))
                 }
             }
             Divider()
+        }
 
-            // Lignes de saves
-            saves.forEach { save ->
-                Row(modifier = Modifier.fillMaxWidth()) {
-                    val label = if (save == null) "NoSave" else "${save}+"
-                    Text(label, modifier = Modifier.width(64.dp))
-
-                    activeUnits.forEach { unit ->
-                        val dmg = expectedDamageForUnit(unit, target, save)
-                        Text(
-                            String.format("%.2f", dmg),
-                            modifier = Modifier.weight(1f)
-                        )
-                    }
-                }
-                Divider()
-            }
+        if (units.count { it.active } > 6) {
+            Spacer(Modifier.height(6.dp))
+            Text(
+                text = "Only first 6 active units shown.",
+                style = MaterialTheme.typography.bodySmall
+            )
         }
     }
 }
