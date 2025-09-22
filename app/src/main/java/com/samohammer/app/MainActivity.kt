@@ -1,11 +1,4 @@
 // V1.2.3 — Simulation agrégée par unité + limite 6 unités actives + "Models" -> "Size"
-
-package com.samohammer.app
-
-import android.os.Bundle
-import androidx.activity.ComponentActivity
-import androidx.activity.compose.setContent
-
 // Layout
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -15,7 +8,6 @@ import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.width
-import androidx.compose.foundation.layout.weight
 
 // Lists
 import androidx.compose.foundation.lazy.LazyColumn
@@ -49,11 +41,19 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.text.input.KeyboardType
-import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 
+// Icons (corrigé ✅)
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.ExpandMore
+import androidx.compose.material.icons.filled.KeyboardArrowRight
+
+// Theme
 import com.samohammer.app.ui.theme.SamoHammerTheme
+
+// Utils
 import kotlin.math.max
+
 
 // -------------------------
 // Activity
