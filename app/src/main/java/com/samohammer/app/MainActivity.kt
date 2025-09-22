@@ -1,7 +1,6 @@
-// V1.2.4 — Inputs 56dp + chevron & toggle compacts
-// - Tous les inputs numériques à 56.dp (Size / Atk / Hit / Wnd / Rend / Dmg).
-// - Chevron et bouton Melee/Shoot compacts (contentPadding réduit + pas de min-touch-size pour eux uniquement).
-// - Base = V1.2.3 inchangée côté logique et Simulation.
+// V1.2.4-fix — Inputs 56dp + chevron & toggle compacts
+// - Ajout de l’import: androidx.compose.foundation.layout.weight
+// - Vérif : tous les usages = Modifier.weight(...)
 
 package com.samohammer.app
 
@@ -22,6 +21,7 @@ import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.layout.PaddingValues
+import androidx.compose.foundation.layout.weight
 
 // Lists
 import androidx.compose.foundation.lazy.LazyColumn
@@ -361,7 +361,7 @@ private fun ProfileEditor(
                     onValueChange = { newName -> onChange(profile.copy(name = newName)) },
                     label = { Text("Weapon Profile") },
                     singleLine = true,
-                    modifier = Modifier.weight(1f) // s'étend mais ne pousse pas les actions
+                    modifier = Modifier.weight(1f) // s’étend mais ne pousse pas les actions
                 )
                 CompositionLocalProvider(LocalMinimumInteractiveComponentEnforcement provides false) {
                     TextButton(
