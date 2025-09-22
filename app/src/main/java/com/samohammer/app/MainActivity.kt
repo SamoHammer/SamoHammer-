@@ -1,5 +1,4 @@
-// V1.1.3 — Option B : chevrons dans la ligne du nom (ligne 1), actions sur une 2e ligne (plus d’espace)
-// Version stable précédente retenue, seule la disposition des en-têtes a changé.
+// V1.2.0
 
 package com.samohammer.app
 
@@ -12,6 +11,7 @@ import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
@@ -21,7 +21,7 @@ import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.itemsIndexed
 
-// TextField options
+// TextField
 import androidx.compose.foundation.text.KeyboardOptions
 
 // Material3
@@ -29,6 +29,8 @@ import androidx.compose.material3.Checkbox
 import androidx.compose.material3.Divider
 import androidx.compose.material3.ElevatedCard
 import androidx.compose.material3.FloatingActionButton
+import androidx.compose.material3.Icon
+import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Scaffold
@@ -42,7 +44,6 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
-import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 
 // UI utils
@@ -50,6 +51,9 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.unit.dp
+import androidx.compose.material3.icons.Icons
+import androidx.compose.material3.icons.filled.ExpandMore
+import androidx.compose.material3.icons.filled.KeyboardArrowRight
 
 import com.samohammer.app.ui.theme.SamoHammerTheme
 import kotlin.math.max
@@ -80,15 +84,24 @@ data class AttackProfile(
     val attacks: Int = 1,
     val toHit: Int = 4,     // 2..6
     val toWound: Int = 4,   // 2..6
-    val rend: Int = 0,      // >= 0
+    val rend: Int = 0,      // >= 0 (rend positif = dégrade la save)
     val damage: Int = 1,
-    val active: Boolean = true
+    // NEW — Crits
+    val critTrigger: Int = 6,       // 2..6 (naturel)
+    val critTwoHits: Boolean = false,
+    val critAutoWound: Boolean = false,
+    val critMortal: Boolean = false,
+    // UI
+    val active: Boolean = true,
+    val expanded: Boolean = true
 )
 
 data class UnitEntry(
     val name: String = "Nouvelle unité",
     val active: Boolean = true,
-    val profiles: List<AttackProfile> = listOf(AttackProfile(name = "Profil 1"))
+    val profiles: List<AttackProfile> = listOf(AttackProfile(name = "Profil 1")),
+    // UI
+    val expanded: Boolean = true
 )
 
 data class TargetConfig(
@@ -108,10 +121,11 @@ private fun pGate(needed: Int): Double = when {
     else -> (7 - needed) / 6.0
 }
 
-private fun pHit(needed: Int, debuff: Int): Double {
-    val eff = clamp2to6(needed + debuff)
+private fun pHitEffective(toHit: Int, debuff: Int): Double {
+    val eff = clamp2to6(toHit + debuff)
     return pGate(eff)
 }
+
 private fun pWound(needed: Int): Double = pGate(needed)
 
 private fun pUnsaved(baseSave: Int?, rend: Int): Double {
@@ -126,20 +140,75 @@ private fun wardFactor(wardNeeded: Int): Double {
     return 1.0 - pGate(wardNeeded)
 }
 
-private fun expectedDamageForProfile(p: AttackProfile, target: TargetConfig, baseSave: Int?): Double {
-    if (!p.active) return 0.0
+/**
+ * EV pour un profil, avec Crits (priorité : Mortal > AutoWound > TwoHits).
+ *
+ * Rappel règles :
+ * - Déclencheur = résultat naturel (non modifié).
+ * - Crits uniquement "On Hit".
+ * - Crits ⊆ Hits (un critique compte comme une touche réussie).
+ */
+private fun expectedDamageForProfile(
+    p: AttackProfile,
+    target: TargetConfig,
+    baseSave: Int?
+): Double {
     val attacks = max(p.models, 0) * max(p.attacks, 0)
     if (attacks == 0) return 0.0
-    val ph = pHit(p.toHit, if (target.debuffHitEnabled) target.debuffHitValue else 0)
-    val pw = pWound(p.toWound)
-    val pu = pUnsaved(baseSave, p.rend)
-    val ward = wardFactor(target.wardNeeded)
-    return attacks * ph * pw * pu * p.damage * ward
+
+    val debuff = if (target.debuffHitEnabled) target.debuffHitValue else 0
+    val effToHit = clamp2to6(p.toHit + debuff)
+    val pHit = pHitEffective(p.toHit, debuff)
+
+    // proba qu'un jet naturel == trigger ET que ça compte comme touche (i.e. trigger >= effToHit)
+    val pCrit =
+        if (p.critTrigger in 2..6 && p.critTrigger >= effToHit) (1.0 / 6.0) else 0.0
+
+    val pW = pWound(p.toWound)
+    val pU = pUnsaved(baseSave, p.rend)
+    val wF = wardFactor(target.wardNeeded)
+
+    // Priorité des modes
+    val useMortal = p.critMortal
+    val useAuto = !useMortal && p.critAutoWound
+    val useTwoHits = !useMortal && !useAuto && p.critTwoHits
+
+    val expCrits = attacks * pCrit
+    val expHits = attacks * pHit
+
+    return when {
+        useMortal -> {
+            // Crit → dégâts mortels : pas de save, Ward seulement
+            val normals = (expHits - expCrits).coerceAtLeast(0.0)
+            val normalUnsaved = normals * pW * pU
+            val mortalDamage = expCrits * p.damage * wF
+            (normalUnsaved * p.damage + mortalDamage)
+        }
+        useAuto -> {
+            // Crit → auto-wound : on saute le jet de blessure mais la save s'applique
+            val normals = (expHits - expCrits).coerceAtLeast(0.0)
+            val normalUnsaved = normals * pW * pU
+            val autoUnsaved = expCrits * pU
+            (normalUnsaved + autoUnsaved) * p.damage * wF
+        }
+        useTwoHits -> {
+            // Crit → +1 jet de blessure (donc 2 au lieu de 1)
+            val extraWoundRolls = expCrits
+            val woundRolls = (expHits + extraWoundRolls) * pW
+            val unsaved = woundRolls * pU
+            unsaved * p.damage * wF
+        }
+        else -> {
+            // Basique
+            val unsaved = expHits * pW * pU
+            unsaved * p.damage * wF
+        }
+    }
 }
 
 private fun expectedDamageAll(units: List<UnitEntry>, target: TargetConfig, baseSave: Int?): Double =
     units.filter { it.active }
-        .flatMap { it.profiles }
+        .flatMap { it.profiles.filter { pr -> pr.active } }
         .sumOf { expectedDamageForProfile(it, target, baseSave) }
 
 // -------------------------
@@ -216,15 +285,9 @@ fun ProfilesTab(units: List<UnitEntry>, onUpdateUnits: (List<UnitEntry>) -> Unit
     ) {
         itemsIndexed(units) { unitIndex, unit ->
             ElevatedCard {
-                var expanded by rememberSaveable(unitIndex) { mutableStateOf(true) }
+                Column(modifier = Modifier.padding(12.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
 
-                Column(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .padding(12.dp),
-                    verticalArrangement = Arrangement.spacedBy(12.dp)
-                ) {
-                    // LIGNE 1 : active + nom (largueur max) + chevron
+                    // Header Unité (Option B : chevron en haut à droite)
                     Row(
                         verticalAlignment = Alignment.CenterVertically,
                         horizontalArrangement = Arrangement.spacedBy(12.dp),
@@ -233,39 +296,25 @@ fun ProfilesTab(units: List<UnitEntry>, onUpdateUnits: (List<UnitEntry>) -> Unit
                         Checkbox(
                             checked = unit.active,
                             onCheckedChange = { checked ->
-                                onUpdateUnits(
-                                    units.toMutableList().also { it[unitIndex] = unit.copy(active = checked) }
-                                )
+                                onUpdateUnits(units.toMutableList().also { it[unitIndex] = unit.copy(active = checked) })
                             }
                         )
+
                         OutlinedTextField(
                             value = unit.name,
                             onValueChange = { newName ->
-                                onUpdateUnits(
-                                    units.toMutableList().also { it[unitIndex] = unit.copy(name = newName) }
-                                )
+                                onUpdateUnits(units.toMutableList().also { it[unitIndex] = unit.copy(name = newName) })
                             },
                             label = { Text("Nom de l’unité") },
                             singleLine = true,
                             modifier = Modifier.weight(1f)
                         )
-                        TextButton(onClick = { expanded = !expanded }) {
-                            Text(if (expanded) "▼" else "▶")
-                        }
-                    }
 
-                    // LIGNE 2 : actions (à droite)
-                    Row(
-                        modifier = Modifier.fillMaxWidth(),
-                        horizontalArrangement = Arrangement.End,
-                        verticalAlignment = Alignment.CenterVertically
-                    ) {
                         TextButton(
                             onClick = {
                                 onUpdateUnits(
                                     units.toMutableList().also { list ->
-                                        val newProfiles =
-                                            unit.profiles + AttackProfile(name = "Profil ${unit.profiles.size + 1}")
+                                        val newProfiles = unit.profiles + AttackProfile(name = "Profil ${unit.profiles.size + 1}")
                                         list[unitIndex] = unit.copy(profiles = newProfiles)
                                     }
                                 )
@@ -277,17 +326,26 @@ fun ProfilesTab(units: List<UnitEntry>, onUpdateUnits: (List<UnitEntry>) -> Unit
                                 onUpdateUnits(units.toMutableList().also { it.removeAt(unitIndex) })
                             }
                         ) { Text("Supprimer unité") }
+
+                        IconButton(onClick = {
+                            onUpdateUnits(units.toMutableList().also { it[unitIndex] = unit.copy(expanded = !unit.expanded) })
+                        }) {
+                            Icon(
+                                imageVector = if (unit.expanded) Icons.Filled.ExpandMore else Icons.Filled.KeyboardArrowRight,
+                                contentDescription = "toggle unit"
+                            )
+                        }
                     }
 
-                    if (expanded) {
+                    if (unit.expanded) {
+                        // Profils
                         unit.profiles.forEachIndexed { pIndex, profile ->
                             ProfileEditor(
                                 profile = profile,
                                 onChange = { updated ->
                                     onUpdateUnits(
                                         units.toMutableList().also { list ->
-                                            val newProfiles =
-                                                unit.profiles.toMutableList().also { it[pIndex] = updated }
+                                            val newProfiles = unit.profiles.toMutableList().also { it[pIndex] = updated }
                                             list[unitIndex] = unit.copy(profiles = newProfiles)
                                         }
                                     )
@@ -318,15 +376,9 @@ private fun ProfileEditor(
     onRemove: () -> Unit
 ) {
     ElevatedCard(modifier = Modifier.fillMaxWidth()) {
-        var expanded by rememberSaveable(profile.hashCode()) { mutableStateOf(true) }
+        Column(modifier = Modifier.padding(12.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
 
-        Column(
-            modifier = Modifier
-                .fillMaxWidth()
-                .padding(12.dp),
-            verticalArrangement = Arrangement.spacedBy(12.dp)
-        ) {
-            // LIGNE 1 : active + nom (max) + type + chevron
+            // Ligne titre + type + actions + chevron (Option B)
             Row(
                 verticalAlignment = Alignment.CenterVertically,
                 horizontalArrangement = Arrangement.spacedBy(12.dp),
@@ -334,8 +386,9 @@ private fun ProfileEditor(
             ) {
                 Checkbox(
                     checked = profile.active,
-                    onCheckedChange = { ok -> onChange(profile.copy(active = ok)) }
+                    onCheckedChange = { checked -> onChange(profile.copy(active = checked)) }
                 )
+
                 OutlinedTextField(
                     value = profile.name,
                     onValueChange = { newName -> onChange(profile.copy(name = newName)) },
@@ -343,6 +396,7 @@ private fun ProfileEditor(
                     singleLine = true,
                     modifier = Modifier.weight(1f)
                 )
+
                 TextButton(
                     onClick = {
                         val next = if (profile.attackType == AttackType.MELEE) AttackType.SHOOT else AttackType.MELEE
@@ -351,26 +405,21 @@ private fun ProfileEditor(
                 ) {
                     Text(text = if (profile.attackType == AttackType.MELEE) "Melee" else "Shoot")
                 }
-                TextButton(onClick = { expanded = !expanded }) {
-                    Text(if (expanded) "▼" else "▶")
+
+                TextButton(onClick = onRemove) { Text("Supprimer profil") }
+
+                IconButton(onClick = { onChange(profile.copy(expanded = !profile.expanded)) }) {
+                    Icon(
+                        imageVector = if (profile.expanded) Icons.Filled.ExpandMore else Icons.Filled.KeyboardArrowRight,
+                        contentDescription = "toggle profile"
+                    )
                 }
             }
 
-            // LIGNE 2 : action (à droite)
-            Row(
-                modifier = Modifier.fillMaxWidth(),
-                horizontalArrangement = Arrangement.End
-            ) {
-                TextButton(onClick = onRemove) { Text("Supprimer profil") }
-            }
-
-            if (expanded) {
-                // Grille de champs
+            if (profile.expanded) {
+                // Paramètres
                 Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
-                    Row(
-                        horizontalArrangement = Arrangement.spacedBy(12.dp),
-                        modifier = Modifier.fillMaxWidth()
-                    ) {
+                    Row(horizontalArrangement = Arrangement.spacedBy(12.dp), modifier = Modifier.fillMaxWidth()) {
                         NumberField(
                             label = "Models",
                             value = profile.models,
@@ -384,10 +433,7 @@ private fun ProfileEditor(
                             modifier = Modifier.width(120.dp)
                         )
                     }
-                    Row(
-                        horizontalArrangement = Arrangement.spacedBy(12.dp),
-                        modifier = Modifier.fillMaxWidth()
-                    ) {
+                    Row(horizontalArrangement = Arrangement.spacedBy(12.dp), modifier = Modifier.fillMaxWidth()) {
                         GateField2to6(
                             label = "Hit (2..6)",
                             value = profile.toHit,
@@ -401,10 +447,7 @@ private fun ProfileEditor(
                             modifier = Modifier.width(120.dp)
                         )
                     }
-                    Row(
-                        horizontalArrangement = Arrangement.spacedBy(12.dp),
-                        modifier = Modifier.fillMaxWidth()
-                    ) {
+                    Row(horizontalArrangement = Arrangement.spacedBy(12.dp), modifier = Modifier.fillMaxWidth()) {
                         NumberField(
                             label = "Rend (+)",
                             value = profile.rend,
@@ -418,6 +461,43 @@ private fun ProfileEditor(
                             modifier = Modifier.width(120.dp)
                         )
                     }
+
+                    Divider()
+
+                    // --- Bloc CRITS ---
+                    Row(
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.spacedBy(12.dp),
+                        modifier = Modifier.fillMaxWidth()
+                    ) {
+                        GateField2to6(
+                            label = "Crit trigger (2..6)",
+                            value = profile.critTrigger,
+                            onValue = { v -> onChange(profile.copy(critTrigger = v)) },
+                            modifier = Modifier.width(140.dp)
+                        )
+                        Spacer(Modifier.width(8.dp))
+                        Checkbox(
+                            checked = profile.critTwoHits,
+                            onCheckedChange = { onChange(profile.copy(critTwoHits = it)) }
+                        )
+                        Text("Crit 2 hits")
+                        Checkbox(
+                            checked = profile.critAutoWound,
+                            onCheckedChange = { onChange(profile.copy(critAutoWound = it)) }
+                        )
+                        Text("Crit Auto-Wound")
+                        Checkbox(
+                            checked = profile.critMortal,
+                            onCheckedChange = { onChange(profile.copy(critMortal = it)) }
+                        )
+                        Text("Crit Mortal")
+                    }
+
+                    Text(
+                        text = "Si plusieurs sont cochés : priorité Mortal > Auto-Wound > Two Hits.",
+                        style = MaterialTheme.typography.bodySmall
+                    )
                 }
             }
         }
@@ -445,6 +525,7 @@ private fun NumberField(
     )
 }
 
+// Gate 2..6 — texte local + mise à jour seulement si 2..6
 @Composable
 private fun GateField2to6(
     label: String,
@@ -548,7 +629,7 @@ fun SimulationTab(units: List<UnitEntry>, target: TargetConfig) {
             .padding(16.dp),
         verticalArrangement = Arrangement.spacedBy(8.dp)
     ) {
-        Text("Espérance de dégâts (toutes unités actives)", style = MaterialTheme.typography.titleMedium)
+        Text("Espérance de dégâts (toutes unités/profils actifs)", style = MaterialTheme.typography.titleMedium)
         val saves = listOf(2, 3, 4, 5, 6, null)
         saves.forEach { save ->
             val label = if (save == null) "No Save" else "${save}+"
