@@ -1,4 +1,4 @@
-// V1.2.1 — Inputs plus compacts (labels courts + largeur 60.dp)
+// V1.2.2 — Labels traduits + bouton "Add Profile" aligné à gauche + Simulation OK
 
 package com.samohammer.app
 
@@ -136,14 +136,8 @@ private fun expectedDamageForProfile(p: AttackProfile, target: TargetConfig, bas
     return attacks * ph * pw * pu * p.damage * ward
 }
 
-private fun expectedDamageAll(units: List<UnitEntry>, target: TargetConfig, baseSave: Int?): Double =
-    units.filter { it.active }
-        .flatMap { it.profiles }
-        .sumOf { expectedDamageForProfile(it, target, baseSave) }
-
-// NEW — EV pour une unité (somme sur ses profils actifs uniquement)
 private fun expectedDamageForUnit(unit: UnitEntry, target: TargetConfig, baseSave: Int?): Double =
-    unit.profiles.filter { it.active }.sumOf { expectedDamageForProfile(it, target, baseSave) }
+    if (!unit.active) 0.0 else unit.profiles.sumOf { expectedDamageForProfile(it, target, baseSave) }
 
 // -------------------------
 // App à 3 onglets
@@ -248,7 +242,7 @@ fun ProfilesTab(units: List<UnitEntry>, onUpdateUnits: (List<UnitEntry>) -> Unit
                                     units.toMutableList().also { it[unitIndex] = unit.copy(name = newName) }
                                 )
                             },
-                            label = { Text("Nom de l’unité") },
+                            label = { Text("Unit") },
                             singleLine = true,
                             modifier = Modifier.weight(1f)
                         )
@@ -257,10 +251,10 @@ fun ProfilesTab(units: List<UnitEntry>, onUpdateUnits: (List<UnitEntry>) -> Unit
                         }
                     }
 
-                    // LIGNE 2 : actions (à droite)
+                    // LIGNE 2 : actions (Add Profile à gauche, Delete à droite)
                     Row(
                         modifier = Modifier.fillMaxWidth(),
-                        horizontalArrangement = Arrangement.End,
+                        horizontalArrangement = Arrangement.SpaceBetween,
                         verticalAlignment = Alignment.CenterVertically
                     ) {
                         TextButton(
@@ -273,13 +267,13 @@ fun ProfilesTab(units: List<UnitEntry>, onUpdateUnits: (List<UnitEntry>) -> Unit
                                     }
                                 )
                             }
-                        ) { Text("Ajouter profil") }
+                        ) { Text("Add Profile") }
 
                         TextButton(
                             onClick = {
                                 onUpdateUnits(units.toMutableList().also { it.removeAt(unitIndex) })
                             }
-                        ) { Text("Supprimer unité") }
+                        ) { Text("Delete") }
                     }
 
                     if (expanded) {
@@ -342,7 +336,7 @@ private fun ProfileEditor(
                 OutlinedTextField(
                     value = profile.name,
                     onValueChange = { newName -> onChange(profile.copy(name = newName)) },
-                    label = { Text("Nom du profil") },
+                    label = { Text("Weapon Profile") },
                     singleLine = true,
                     modifier = Modifier.weight(1f)
                 )
@@ -364,11 +358,11 @@ private fun ProfileEditor(
                 modifier = Modifier.fillMaxWidth(),
                 horizontalArrangement = Arrangement.End
             ) {
-                TextButton(onClick = onRemove) { Text("Supprimer profil") }
+                TextButton(onClick = onRemove) { Text("Delete") }
             }
 
             if (expanded) {
-                // Grille de champs (labels courts + largeur 60.dp)
+                // Grille de champs (format compact 60.dp)
                 Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
                     Row(
                         horizontalArrangement = Arrangement.spacedBy(12.dp),
@@ -541,7 +535,7 @@ fun TargetTab(target: TargetConfig, onUpdate: (TargetConfig) -> Unit) {
 }
 
 // -------------------------
-// Onglet Simulations (par unité)
+// Onglet Simulations (par unité active)
 // -------------------------
 @Composable
 fun SimulationTab(units: List<UnitEntry>, target: TargetConfig) {
@@ -566,15 +560,10 @@ fun SimulationTab(units: List<UnitEntry>, target: TargetConfig) {
         verticalArrangement = Arrangement.spacedBy(12.dp)
     ) {
         itemsIndexed(activeUnits) { _, unit ->
-            ElevatedCard(modifier = Modifier.fillMaxWidth()) {
-                Column(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .padding(12.dp),
-                    verticalArrangement = Arrangement.spacedBy(8.dp)
-                ) {
+            ElevatedCard {
+                Column(modifier = Modifier.padding(12.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
                     Text(unit.name, style = MaterialTheme.typography.titleMedium)
-
+                    Divider()
                     val saves = listOf(2, 3, 4, 5, 6, null)
                     saves.forEach { save ->
                         val label = if (save == null) "No Save" else "${save}+"
