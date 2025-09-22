@@ -1,7 +1,7 @@
-// V1.2.3 — Champs compacts 50dp + champ "Weapon Profile" un peu plus long
-// - Inputs: Size / Atk / Hit / Wnd / Rend / Dmg à 50.dp
-// - Champ "Weapon Profile" conserve weight(1f) (prend tout l’espace dispo sans gêner les boutons)
-// - Reste identique à V1.2.2 (simulation en colonnes par unité, etc.)
+// V1.2.4 — Inputs 56dp + chevron & toggle compacts
+// - Tous les inputs numériques à 56.dp (Size / Atk / Hit / Wnd / Rend / Dmg).
+// - Chevron et bouton Melee/Shoot compacts (contentPadding réduit + pas de min-touch-size pour eux uniquement).
+// - Base = V1.2.3 inchangée côté logique et Simulation.
 
 package com.samohammer.app
 
@@ -21,6 +21,7 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.layout.PaddingValues
 
 // Lists
 import androidx.compose.foundation.lazy.LazyColumn
@@ -41,9 +42,12 @@ import androidx.compose.material3.Tab
 import androidx.compose.material3.TabRow
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
+import androidx.compose.material3.LocalMinimumInteractiveComponentEnforcement
+import androidx.compose.material3.ButtonDefaults
 
 // State
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -232,7 +236,7 @@ fun ProfilesTab(units: List<UnitEntry>, onUpdateUnits: (List<UnitEntry>) -> Unit
                         .padding(12.dp),
                     verticalArrangement = Arrangement.spacedBy(12.dp)
                 ) {
-                    // LIGNE 1 : active + nom (largeur max) + chevron
+                    // LIGNE 1 : active + nom (largeur max) + chevron (compact)
                     Row(
                         verticalAlignment = Alignment.CenterVertically,
                         horizontalArrangement = Arrangement.spacedBy(12.dp),
@@ -257,8 +261,14 @@ fun ProfilesTab(units: List<UnitEntry>, onUpdateUnits: (List<UnitEntry>) -> Unit
                             singleLine = true,
                             modifier = Modifier.weight(1f)
                         )
-                        TextButton(onClick = { expanded = !expanded }) {
-                            Text(if (expanded) "▼" else "▶")
+                        CompositionLocalProvider(LocalMinimumInteractiveComponentEnforcement provides false) {
+                            TextButton(
+                                onClick = { expanded = !expanded },
+                                contentPadding = PaddingValues(horizontal = 6.dp, vertical = 4.dp),
+                                colors = ButtonDefaults.textButtonColors()
+                            ) {
+                                Text(if (expanded) "▼" else "▶")
+                            }
                         }
                     }
 
@@ -336,7 +346,7 @@ private fun ProfileEditor(
                 .padding(12.dp),
             verticalArrangement = Arrangement.spacedBy(12.dp)
         ) {
-            // LIGNE 1 : active + nom (max) + type + chevron
+            // LIGNE 1 : active + nom (max) + type (compact) + chevron (compact)
             Row(
                 verticalAlignment = Alignment.CenterVertically,
                 horizontalArrangement = Arrangement.spacedBy(12.dp),
@@ -351,18 +361,28 @@ private fun ProfileEditor(
                     onValueChange = { newName -> onChange(profile.copy(name = newName)) },
                     label = { Text("Weapon Profile") },
                     singleLine = true,
-                    modifier = Modifier.weight(1f) // → prend tout l'espace dispo, sans gêner les boutons
+                    modifier = Modifier.weight(1f) // s'étend mais ne pousse pas les actions
                 )
-                TextButton(
-                    onClick = {
-                        val next = if (profile.attackType == AttackType.MELEE) AttackType.SHOOT else AttackType.MELEE
-                        onChange(profile.copy(attackType = next))
+                CompositionLocalProvider(LocalMinimumInteractiveComponentEnforcement provides false) {
+                    TextButton(
+                        onClick = {
+                            val next = if (profile.attackType == AttackType.MELEE) AttackType.SHOOT else AttackType.MELEE
+                            onChange(profile.copy(attackType = next))
+                        },
+                        contentPadding = PaddingValues(horizontal = 8.dp, vertical = 4.dp),
+                        colors = ButtonDefaults.textButtonColors()
+                    ) {
+                        Text(if (profile.attackType == AttackType.MELEE) "Melee" else "Shoot")
                     }
-                ) {
-                    Text(text = if (profile.attackType == AttackType.MELEE) "Melee" else "Shoot")
                 }
-                TextButton(onClick = { expanded = !expanded }) {
-                    Text(if (expanded) "▼" else "▶")
+                CompositionLocalProvider(LocalMinimumInteractiveComponentEnforcement provides false) {
+                    TextButton(
+                        onClick = { expanded = !expanded },
+                        contentPadding = PaddingValues(horizontal = 6.dp, vertical = 4.dp),
+                        colors = ButtonDefaults.textButtonColors()
+                    ) {
+                        Text(if (expanded) "▼" else "▶")
+                    }
                 }
             }
 
@@ -375,7 +395,7 @@ private fun ProfileEditor(
             }
 
             if (expanded) {
-                // Grille de champs (compacts 50dp)
+                // Grille de champs (compacts 56dp)
                 Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
                     Row(
                         horizontalArrangement = Arrangement.spacedBy(12.dp),
@@ -385,13 +405,13 @@ private fun ProfileEditor(
                             label = "Size",
                             value = profile.models,
                             onValue = { v -> onChange(profile.copy(models = v.coerceAtLeast(0))) },
-                            modifier = Modifier.width(50.dp)
+                            modifier = Modifier.width(56.dp)
                         )
                         NumberField(
                             label = "Atk",
                             value = profile.attacks,
                             onValue = { v -> onChange(profile.copy(attacks = v.coerceAtLeast(0))) },
-                            modifier = Modifier.width(50.dp)
+                            modifier = Modifier.width(56.dp)
                         )
                     }
                     Row(
@@ -402,13 +422,13 @@ private fun ProfileEditor(
                             label = "Hit",
                             value = profile.toHit,
                             onValue = { v -> onChange(profile.copy(toHit = v)) },
-                            modifier = Modifier.width(50.dp)
+                            modifier = Modifier.width(56.dp)
                         )
                         GateField2to6(
                             label = "Wnd",
                             value = profile.toWound,
                             onValue = { v -> onChange(profile.copy(toWound = v)) },
-                            modifier = Modifier.width(50.dp)
+                            modifier = Modifier.width(56.dp)
                         )
                     }
                     Row(
@@ -419,13 +439,13 @@ private fun ProfileEditor(
                             label = "Rend",
                             value = profile.rend,
                             onValue = { v -> onChange(profile.copy(rend = v.coerceAtLeast(0))) },
-                            modifier = Modifier.width(50.dp)
+                            modifier = Modifier.width(56.dp)
                         )
                         NumberField(
                             label = "Dmg",
                             value = profile.damage,
                             onValue = { v -> onChange(profile.copy(damage = v.coerceAtLeast(0))) },
-                            modifier = Modifier.width(50.dp)
+                            modifier = Modifier.width(56.dp)
                         )
                     }
                 }
