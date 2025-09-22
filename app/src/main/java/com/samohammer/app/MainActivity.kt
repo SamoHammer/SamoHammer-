@@ -1,3 +1,7 @@
+// V1.2.1
+
+package com.samohammer.app
+
 import android.os.Bundle
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
@@ -48,7 +52,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.unit.dp
 
-// Icônes (corrigé)
+// Icônes (Material Icons)
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.ExpandMore
 import androidx.compose.material.icons.filled.KeyboardArrowRight
@@ -84,11 +88,11 @@ data class AttackProfile(
     val toWound: Int = 4,   // 2..6
     val rend: Int = 0,      // >= 0 (rend positif = dégrade la save)
     val damage: Int = 1,
-    // NEW — Crits
-    val critTrigger: Int = 6,       // 2..6 (naturel)
-    val critTwoHits: Boolean = false,
-    val critAutoWound: Boolean = false,
-    val critMortal: Boolean = false,
+    // Crits
+    val critTrigger: Int = 6,           // 2..6 (naturel)
+    val critTwoHits: Boolean = false,   // Crit 2 hits
+    val critAutoWound: Boolean = false, // Crit auto wound
+    val critMortal: Boolean = false,    // Crit mortal
     // UI
     val active: Boolean = true,
     val expanded: Boolean = true
@@ -140,11 +144,10 @@ private fun wardFactor(wardNeeded: Int): Double {
 
 /**
  * EV pour un profil, avec Crits (priorité : Mortal > AutoWound > TwoHits).
- *
- * Rappel règles :
+ * Rappels :
  * - Déclencheur = résultat naturel (non modifié).
- * - Crits uniquement "On Hit".
- * - Crits ⊆ Hits (un critique compte comme une touche réussie).
+ * - Crits uniquement On-Hit.
+ * - Un critique compte comme une touche réussie.
  */
 private fun expectedDamageForProfile(
     p: AttackProfile,
@@ -158,15 +161,13 @@ private fun expectedDamageForProfile(
     val effToHit = clamp2to6(p.toHit + debuff)
     val pHit = pHitEffective(p.toHit, debuff)
 
-    // proba qu'un jet naturel == trigger ET que ça compte comme touche (i.e. trigger >= effToHit)
-    val pCrit =
-        if (p.critTrigger in 2..6 && p.critTrigger >= effToHit) (1.0 / 6.0) else 0.0
+    // proba que le jet naturel == trigger ET valide la touche (trigger >= seuil effectif)
+    val pCrit = if (p.critTrigger in 2..6 && p.critTrigger >= effToHit) (1.0 / 6.0) else 0.0
 
     val pW = pWound(p.toWound)
     val pU = pUnsaved(baseSave, p.rend)
     val wF = wardFactor(target.wardNeeded)
 
-    // Priorité des modes
     val useMortal = p.critMortal
     val useAuto = !useMortal && p.critAutoWound
     val useTwoHits = !useMortal && !useAuto && p.critTwoHits
@@ -176,28 +177,27 @@ private fun expectedDamageForProfile(
 
     return when {
         useMortal -> {
-            // Crit → dégâts mortels : pas de save, Ward seulement
+            // Crit → mortels (ignore la save), ward seulement
             val normals = (expHits - expCrits).coerceAtLeast(0.0)
             val normalUnsaved = normals * pW * pU
             val mortalDamage = expCrits * p.damage * wF
             (normalUnsaved * p.damage + mortalDamage)
         }
         useAuto -> {
-            // Crit → auto-wound : on saute le jet de blessure mais la save s'applique
+            // Crit → auto-wound (save s’applique)
             val normals = (expHits - expCrits).coerceAtLeast(0.0)
             val normalUnsaved = normals * pW * pU
             val autoUnsaved = expCrits * pU
             (normalUnsaved + autoUnsaved) * p.damage * wF
         }
         useTwoHits -> {
-            // Crit → +1 jet de blessure (donc 2 au lieu de 1)
+            // Crit → +1 jet de blessure
             val extraWoundRolls = expCrits
             val woundRolls = (expHits + extraWoundRolls) * pW
             val unsaved = woundRolls * pU
             unsaved * p.damage * wF
         }
         else -> {
-            // Basique
             val unsaved = expHits * pW * pU
             unsaved * p.damage * wF
         }
@@ -208,6 +208,11 @@ private fun expectedDamageAll(units: List<UnitEntry>, target: TargetConfig, base
     units.filter { it.active }
         .flatMap { it.profiles.filter { pr -> pr.active } }
         .sumOf { expectedDamageForProfile(it, target, baseSave) }
+
+// NEW: EV par unité (pour SimulationTab par unité)
+private fun expectedDamageForUnit(unit: UnitEntry, target: TargetConfig, baseSave: Int?): Double =
+    if (!unit.active) 0.0
+    else unit.profiles.filter { it.active }.sumOf { expectedDamageForProfile(it, target, baseSave) }
 
 // -------------------------
 // App à 3 onglets
@@ -285,7 +290,7 @@ fun ProfilesTab(units: List<UnitEntry>, onUpdateUnits: (List<UnitEntry>) -> Unit
             ElevatedCard {
                 Column(modifier = Modifier.padding(12.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
 
-                    // Header Unité (Option B : chevron en haut à droite)
+                    // Header Unité (chevron à droite)
                     Row(
                         verticalAlignment = Alignment.CenterVertically,
                         horizontalArrangement = Arrangement.spacedBy(12.dp),
@@ -336,7 +341,6 @@ fun ProfilesTab(units: List<UnitEntry>, onUpdateUnits: (List<UnitEntry>) -> Unit
                     }
 
                     if (unit.expanded) {
-                        // Profils
                         unit.profiles.forEachIndexed { pIndex, profile ->
                             ProfileEditor(
                                 profile = profile,
@@ -376,7 +380,7 @@ private fun ProfileEditor(
     ElevatedCard(modifier = Modifier.fillMaxWidth()) {
         Column(modifier = Modifier.padding(12.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
 
-            // Ligne titre + type + actions + chevron (Option B)
+            // Ligne titre + type + actions + chevron
             Row(
                 verticalAlignment = Alignment.CenterVertically,
                 horizontalArrangement = Arrangement.spacedBy(12.dp),
@@ -462,7 +466,7 @@ private fun ProfileEditor(
 
                     Divider()
 
-                    // --- Bloc CRITS ---
+                    // CRITS
                     Row(
                         verticalAlignment = Alignment.CenterVertically,
                         horizontalArrangement = Arrangement.spacedBy(12.dp),
@@ -617,7 +621,7 @@ fun TargetTab(target: TargetConfig, onUpdate: (TargetConfig) -> Unit) {
 }
 
 // -------------------------
-// Onglet Simulations
+// Onglet Simulations (par unité active)
 // -------------------------
 @Composable
 fun SimulationTab(units: List<UnitEntry>, target: TargetConfig) {
@@ -625,18 +629,27 @@ fun SimulationTab(units: List<UnitEntry>, target: TargetConfig) {
         modifier = Modifier
             .fillMaxSize()
             .padding(16.dp),
-        verticalArrangement = Arrangement.spacedBy(8.dp)
+        verticalArrangement = Arrangement.spacedBy(16.dp)
     ) {
-        Text("Espérance de dégâts (toutes unités/profils actifs)", style = MaterialTheme.typography.titleMedium)
-        val saves = listOf(2, 3, 4, 5, 6, null)
-        saves.forEach { save ->
-            val label = if (save == null) "No Save" else "${save}+"
-            val dmg = expectedDamageAll(units, target, save)
-            Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
-                Text(label)
-                Text(String.format("%.2f", dmg))
+        Text("Espérance de dégâts (par unité active)", style = MaterialTheme.typography.titleMedium)
+
+        units.filter { it.active }.forEach { unit ->
+            Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                Text(unit.name, style = MaterialTheme.typography.titleSmall)
+                val saves = listOf(2, 3, 4, 5, 6, null)
+                saves.forEach { save ->
+                    val label = if (save == null) "No Save" else "${save}+"
+                    val dmg = expectedDamageForUnit(unit, target, save)
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.SpaceBetween
+                    ) {
+                        Text(label)
+                        Text(String.format("%.2f", dmg))
+                    }
+                    Divider()
+                }
             }
-            Divider()
         }
     }
 }
