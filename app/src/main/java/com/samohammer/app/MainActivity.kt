@@ -1,4 +1,4 @@
-// V1.2.0 — Simulations par unité (une carte/tableau par unité active)
+// V1.2.1 — Inputs plus compacts (labels courts + largeur 60.dp)
 
 package com.samohammer.app
 
@@ -368,7 +368,7 @@ private fun ProfileEditor(
             }
 
             if (expanded) {
-                // Grille de champs
+                // Grille de champs (labels courts + largeur 60.dp)
                 Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
                     Row(
                         horizontalArrangement = Arrangement.spacedBy(12.dp),
@@ -378,13 +378,13 @@ private fun ProfileEditor(
                             label = "Models",
                             value = profile.models,
                             onValue = { v -> onChange(profile.copy(models = v.coerceAtLeast(0))) },
-                            modifier = Modifier.width(120.dp)
+                            modifier = Modifier.width(60.dp)
                         )
                         NumberField(
-                            label = "Attacks",
+                            label = "Atk",
                             value = profile.attacks,
                             onValue = { v -> onChange(profile.copy(attacks = v.coerceAtLeast(0))) },
-                            modifier = Modifier.width(120.dp)
+                            modifier = Modifier.width(60.dp)
                         )
                     }
                     Row(
@@ -392,16 +392,16 @@ private fun ProfileEditor(
                         modifier = Modifier.fillMaxWidth()
                     ) {
                         GateField2to6(
-                            label = "Hit (2..6)",
+                            label = "Hit",
                             value = profile.toHit,
                             onValue = { v -> onChange(profile.copy(toHit = v)) },
-                            modifier = Modifier.width(120.dp)
+                            modifier = Modifier.width(60.dp)
                         )
                         GateField2to6(
-                            label = "Wound (2..6)",
+                            label = "Wnd",
                             value = profile.toWound,
                             onValue = { v -> onChange(profile.copy(toWound = v)) },
-                            modifier = Modifier.width(120.dp)
+                            modifier = Modifier.width(60.dp)
                         )
                     }
                     Row(
@@ -409,16 +409,16 @@ private fun ProfileEditor(
                         modifier = Modifier.fillMaxWidth()
                     ) {
                         NumberField(
-                            label = "Rend (+)",
+                            label = "Rend",
                             value = profile.rend,
                             onValue = { v -> onChange(profile.copy(rend = v.coerceAtLeast(0))) },
-                            modifier = Modifier.width(120.dp)
+                            modifier = Modifier.width(60.dp)
                         )
                         NumberField(
-                            label = "Damage",
+                            label = "Dmg",
                             value = profile.damage,
                             onValue = { v -> onChange(profile.copy(damage = v.coerceAtLeast(0))) },
-                            modifier = Modifier.width(120.dp)
+                            modifier = Modifier.width(60.dp)
                         )
                     }
                 }
