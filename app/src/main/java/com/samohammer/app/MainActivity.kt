@@ -1,4 +1,4 @@
-// V1.2.2 — Labels traduits + bouton "Add Profile" aligné à gauche + Simulation OK
+// V1.2.3 — Simulation agrégée par unité + limite 6 unités actives + "Models" -> "Size"
 
 package com.samohammer.app
 
@@ -15,6 +15,7 @@ import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.layout.weight
 
 // Lists
 import androidx.compose.foundation.lazy.LazyColumn
@@ -48,6 +49,7 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.text.input.KeyboardType
+import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 
 import com.samohammer.app.ui.theme.SamoHammerTheme
@@ -205,6 +207,8 @@ fun SamoHammerApp() {
 // -------------------------
 @Composable
 fun ProfilesTab(units: List<UnitEntry>, onUpdateUnits: (List<UnitEntry>) -> Unit) {
+    val activeCount = units.count { it.active }
+
     LazyColumn(
         modifier = Modifier
             .fillMaxSize()
@@ -221,17 +225,21 @@ fun ProfilesTab(units: List<UnitEntry>, onUpdateUnits: (List<UnitEntry>) -> Unit
                         .padding(12.dp),
                     verticalArrangement = Arrangement.spacedBy(12.dp)
                 ) {
-                    // LIGNE 1 : active + nom (largueur max) + chevron
+                    // LIGNE 1 : active + nom (largeur max) + chevron
                     Row(
                         verticalAlignment = Alignment.CenterVertically,
                         horizontalArrangement = Arrangement.spacedBy(12.dp),
                         modifier = Modifier.fillMaxWidth()
                     ) {
+                        val currentActive = units.count { it.active } - if (unit.active) 1 else 0
                         Checkbox(
                             checked = unit.active,
                             onCheckedChange = { checked ->
+                                // Limite : max 6 unités actives
+                                val canEnable = !(checked && currentActive >= 6)
+                                val newActive = if (canEnable) checked else unit.active
                                 onUpdateUnits(
-                                    units.toMutableList().also { it[unitIndex] = unit.copy(active = checked) }
+                                    units.toMutableList().also { it[unitIndex] = unit.copy(active = newActive) }
                                 )
                             }
                         )
@@ -302,6 +310,15 @@ fun ProfilesTab(units: List<UnitEntry>, onUpdateUnits: (List<UnitEntry>) -> Unit
                             )
                         }
                     }
+
+                    // Aide visuelle si limite atteinte
+                    if (activeCount >= 6) {
+                        Text(
+                            "Max 6 active units.",
+                            style = MaterialTheme.typography.bodySmall,
+                            color = MaterialTheme.colorScheme.error
+                        )
+                    }
                 }
             }
         }
@@ -362,14 +379,14 @@ private fun ProfileEditor(
             }
 
             if (expanded) {
-                // Grille de champs (format compact 60.dp)
+                // Grille de champs (format compact)
                 Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
                     Row(
                         horizontalArrangement = Arrangement.spacedBy(12.dp),
                         modifier = Modifier.fillMaxWidth()
                     ) {
                         NumberField(
-                            label = "Models",
+                            label = "Size",
                             value = profile.models,
                             onValue = { v -> onChange(profile.copy(models = v.coerceAtLeast(0))) },
                             modifier = Modifier.width(60.dp)
@@ -535,11 +552,11 @@ fun TargetTab(target: TargetConfig, onUpdate: (TargetConfig) -> Unit) {
 }
 
 // -------------------------
-// Onglet Simulations (par unité active)
+// Onglet Simulations — Tableau agrégé
 // -------------------------
 @Composable
 fun SimulationTab(units: List<UnitEntry>, target: TargetConfig) {
-    val activeUnits = units.filter { it.active }
+    val activeUnits = units.filter { it.active }.take(6) // hard cap 6 colonnes max
     if (activeUnits.isEmpty()) {
         Column(
             modifier = Modifier
@@ -553,31 +570,45 @@ fun SimulationTab(units: List<UnitEntry>, target: TargetConfig) {
         return
     }
 
-    LazyColumn(
+    val saves = listOf(2, 3, 4, 5, 6, null)
+
+    ElevatedCard(
         modifier = Modifier
             .fillMaxSize()
-            .padding(12.dp),
-        verticalArrangement = Arrangement.spacedBy(12.dp)
+            .padding(12.dp)
     ) {
-        itemsIndexed(activeUnits) { _, unit ->
-            ElevatedCard {
-                Column(modifier = Modifier.padding(12.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                    Text(unit.name, style = MaterialTheme.typography.titleMedium)
-                    Divider()
-                    val saves = listOf(2, 3, 4, 5, 6, null)
-                    saves.forEach { save ->
-                        val label = if (save == null) "No Save" else "${save}+"
+        Column(modifier = Modifier.padding(12.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+            // Header
+            Row(modifier = Modifier.fillMaxWidth()) {
+                // Colonne Save (fixe)
+                Text("Save", modifier = Modifier.width(64.dp))
+                // Colonnes par unité (réparties)
+                activeUnits.forEach { unit ->
+                    Text(
+                        unit.name,
+                        maxLines = 1,
+                        overflow = TextOverflow.Ellipsis,
+                        modifier = Modifier.weight(1f)
+                    )
+                }
+            }
+            Divider()
+
+            // Lignes de saves
+            saves.forEach { save ->
+                Row(modifier = Modifier.fillMaxWidth()) {
+                    val label = if (save == null) "NoSave" else "${save}+"
+                    Text(label, modifier = Modifier.width(64.dp))
+
+                    activeUnits.forEach { unit ->
                         val dmg = expectedDamageForUnit(unit, target, save)
-                        Row(
-                            modifier = Modifier.fillMaxWidth(),
-                            horizontalArrangement = Arrangement.SpaceBetween
-                        ) {
-                            Text(label)
-                            Text(String.format("%.2f", dmg))
-                        }
-                        Divider()
+                        Text(
+                            String.format("%.2f", dmg),
+                            modifier = Modifier.weight(1f)
+                        )
                     }
                 }
+                Divider()
             }
         }
     }
