@@ -43,7 +43,7 @@ jobs:
 
       - name: Build Debug APK
         if: success()
-        run: ./gradlew assembleDebug --no-daemon --no-build-cache --stacktrace
+        run: ./gradlew clean assembleDebug --no-daemon --no-build-cache --rerun-tasks --stacktrace --info
 
       # Uploader les logs *console* et les dossiers temporaires si présents
       - name: Upload build reports
