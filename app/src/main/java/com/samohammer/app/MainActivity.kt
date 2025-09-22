@@ -1,3 +1,5 @@
+// V1.0.1 — élargit les en-têtes : cartes d’unité en full width + imports explicites
+
 package com.samohammer.app
 
 import android.os.Bundle
@@ -13,6 +15,7 @@ import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.layout.weight
 
 // Lists
 import androidx.compose.foundation.lazy.LazyColumn
@@ -191,12 +194,13 @@ fun ProfilesTab(units: List<UnitEntry>, onUpdateUnits: (List<UnitEntry>) -> Unit
         verticalArrangement = Arrangement.spacedBy(12.dp)
     ) {
         itemsIndexed(units) { unitIndex, unit ->
-            ElevatedCard {
+            // 🔧 clé du fix : la carte d’UNITE prend toute la largeur
+            ElevatedCard(modifier = Modifier.fillMaxWidth()) {
                 Column(
                     modifier = Modifier.padding(12.dp),
                     verticalArrangement = Arrangement.spacedBy(12.dp)
                 ) {
-                    // En-tête unité
+                    // En-tête unité (checkbox + nom extensible + boutons à droite)
                     Row(
                         verticalAlignment = Alignment.CenterVertically,
                         horizontalArrangement = Arrangement.spacedBy(12.dp),
