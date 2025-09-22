@@ -1,5 +1,4 @@
-// V1.1.3 — Option B : chevrons dans la ligne du nom (ligne 1), actions sur une 2e ligne (plus d’espace)
-// Version stable précédente retenue, seule la disposition des en-têtes a changé.
+// V1.2.0 — Simulations par unité (une carte/tableau par unité active)
 
 package com.samohammer.app
 
@@ -141,6 +140,10 @@ private fun expectedDamageAll(units: List<UnitEntry>, target: TargetConfig, base
     units.filter { it.active }
         .flatMap { it.profiles }
         .sumOf { expectedDamageForProfile(it, target, baseSave) }
+
+// NEW — EV pour une unité (somme sur ses profils actifs uniquement)
+private fun expectedDamageForUnit(unit: UnitEntry, target: TargetConfig, baseSave: Int?): Double =
+    unit.profiles.filter { it.active }.sumOf { expectedDamageForProfile(it, target, baseSave) }
 
 // -------------------------
 // App à 3 onglets
@@ -538,26 +541,55 @@ fun TargetTab(target: TargetConfig, onUpdate: (TargetConfig) -> Unit) {
 }
 
 // -------------------------
-// Onglet Simulations
+// Onglet Simulations (par unité)
 // -------------------------
 @Composable
 fun SimulationTab(units: List<UnitEntry>, target: TargetConfig) {
-    Column(
+    val activeUnits = units.filter { it.active }
+    if (activeUnits.isEmpty()) {
+        Column(
+            modifier = Modifier
+                .fillMaxSize()
+                .padding(16.dp),
+            verticalArrangement = Arrangement.Center,
+            horizontalAlignment = Alignment.CenterHorizontally
+        ) {
+            Text("Aucune unité active.")
+        }
+        return
+    }
+
+    LazyColumn(
         modifier = Modifier
             .fillMaxSize()
-            .padding(16.dp),
-        verticalArrangement = Arrangement.spacedBy(8.dp)
+            .padding(12.dp),
+        verticalArrangement = Arrangement.spacedBy(12.dp)
     ) {
-        Text("Espérance de dégâts (toutes unités actives)", style = MaterialTheme.typography.titleMedium)
-        val saves = listOf(2, 3, 4, 5, 6, null)
-        saves.forEach { save ->
-            val label = if (save == null) "No Save" else "${save}+"
-            val dmg = expectedDamageAll(units, target, save)
-            Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
-                Text(label)
-                Text(String.format("%.2f", dmg))
+        itemsIndexed(activeUnits) { _, unit ->
+            ElevatedCard(modifier = Modifier.fillMaxWidth()) {
+                Column(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(12.dp),
+                    verticalArrangement = Arrangement.spacedBy(8.dp)
+                ) {
+                    Text(unit.name, style = MaterialTheme.typography.titleMedium)
+
+                    val saves = listOf(2, 3, 4, 5, 6, null)
+                    saves.forEach { save ->
+                        val label = if (save == null) "No Save" else "${save}+"
+                        val dmg = expectedDamageForUnit(unit, target, save)
+                        Row(
+                            modifier = Modifier.fillMaxWidth(),
+                            horizontalArrangement = Arrangement.SpaceBetween
+                        ) {
+                            Text(label)
+                            Text(String.format("%.2f", dmg))
+                        }
+                        Divider()
+                    }
+                }
             }
-            Divider()
         }
     }
 }
