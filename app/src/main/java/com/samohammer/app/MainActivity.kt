@@ -1,9 +1,7 @@
-// V1.2.2 — Stable base + Simu en colonnes par unité (max 6 actives)
-// - Chevrons texte (pas d'icônes) pour éviter les soucis d’import.
-// - Libellés courts: Size / Atk / Hit / Wnd / Rend / Dmg.
-// - Champs compacts (~90dp).
-// - "Add Profile" aligné à gauche.
-// - Simulation: 1 tableau, lignes = saves (2+,3+,4+,5+,6+,No Save), colonnes = unités actives (max 6).
+// V1.2.3 — Champs compacts 50dp + champ "Weapon Profile" un peu plus long
+// - Inputs: Size / Atk / Hit / Wnd / Rend / Dmg à 50.dp
+// - Champ "Weapon Profile" conserve weight(1f) (prend tout l’espace dispo sans gêner les boutons)
+// - Reste identique à V1.2.2 (simulation en colonnes par unité, etc.)
 
 package com.samohammer.app
 
@@ -353,7 +351,7 @@ private fun ProfileEditor(
                     onValueChange = { newName -> onChange(profile.copy(name = newName)) },
                     label = { Text("Weapon Profile") },
                     singleLine = true,
-                    modifier = Modifier.weight(1f)
+                    modifier = Modifier.weight(1f) // → prend tout l'espace dispo, sans gêner les boutons
                 )
                 TextButton(
                     onClick = {
@@ -377,7 +375,7 @@ private fun ProfileEditor(
             }
 
             if (expanded) {
-                // Grille de champs (compacts)
+                // Grille de champs (compacts 50dp)
                 Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
                     Row(
                         horizontalArrangement = Arrangement.spacedBy(12.dp),
@@ -387,13 +385,13 @@ private fun ProfileEditor(
                             label = "Size",
                             value = profile.models,
                             onValue = { v -> onChange(profile.copy(models = v.coerceAtLeast(0))) },
-                            modifier = Modifier.width(90.dp)
+                            modifier = Modifier.width(50.dp)
                         )
                         NumberField(
                             label = "Atk",
                             value = profile.attacks,
                             onValue = { v -> onChange(profile.copy(attacks = v.coerceAtLeast(0))) },
-                            modifier = Modifier.width(90.dp)
+                            modifier = Modifier.width(50.dp)
                         )
                     }
                     Row(
@@ -404,13 +402,13 @@ private fun ProfileEditor(
                             label = "Hit",
                             value = profile.toHit,
                             onValue = { v -> onChange(profile.copy(toHit = v)) },
-                            modifier = Modifier.width(90.dp)
+                            modifier = Modifier.width(50.dp)
                         )
                         GateField2to6(
                             label = "Wnd",
                             value = profile.toWound,
                             onValue = { v -> onChange(profile.copy(toWound = v)) },
-                            modifier = Modifier.width(90.dp)
+                            modifier = Modifier.width(50.dp)
                         )
                     }
                     Row(
@@ -421,13 +419,13 @@ private fun ProfileEditor(
                             label = "Rend",
                             value = profile.rend,
                             onValue = { v -> onChange(profile.copy(rend = v.coerceAtLeast(0))) },
-                            modifier = Modifier.width(90.dp)
+                            modifier = Modifier.width(50.dp)
                         )
                         NumberField(
                             label = "Dmg",
                             value = profile.damage,
                             onValue = { v -> onChange(profile.copy(damage = v.coerceAtLeast(0))) },
-                            modifier = Modifier.width(90.dp)
+                            modifier = Modifier.width(50.dp)
                         )
                     }
                 }
