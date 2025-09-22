@@ -1,6 +1,5 @@
-// V1.2.4-fix — Inputs 56dp + chevron & toggle compacts
-// - Ajout de l’import: androidx.compose.foundation.layout.weight
-// - Vérif : tous les usages = Modifier.weight(...)
+// V1.2.4-fix — Imports propres + weight OK + chevrons texte + inputs 56dp
+// Base: V1.2.4 (logique inchangée), uniquement hygiène et petits ajustements UI.
 
 package com.samohammer.app
 
@@ -14,13 +13,13 @@ import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.width
-import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.weight
 
 // Lists
@@ -361,7 +360,7 @@ private fun ProfileEditor(
                     onValueChange = { newName -> onChange(profile.copy(name = newName)) },
                     label = { Text("Weapon Profile") },
                     singleLine = true,
-                    modifier = Modifier.weight(1f) // s’étend mais ne pousse pas les actions
+                    modifier = Modifier.weight(1f)
                 )
                 CompositionLocalProvider(LocalMinimumInteractiveComponentEnforcement provides false) {
                     TextButton(
@@ -606,8 +605,7 @@ fun SimulationTab(units: List<UnitEntry>, target: TargetConfig) {
         val saves = listOf<Int?>(2, 3, 4, 5, 6, null)
         saves.forEach { save ->
             Row(
-                modifier = Modifier
-                    .fillMaxWidth(),
+                modifier = Modifier.fillMaxWidth(),
                 horizontalArrangement = Arrangement.spacedBy(12.dp)
             ) {
                 val label = if (save == null) "No Save" else "${save}+"
