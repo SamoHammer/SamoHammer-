@@ -33,7 +33,7 @@ android {
         compose = true
     }
 
-    // Kotlin 1.9.20  ↔  Compose Compiler 1.5.4
+    // IMPORTANT : Compose compiler 1.5.4 â†” Kotlin 1.9.20
     composeOptions {
         kotlinCompilerExtensionVersion = "1.5.4"
     }
@@ -54,24 +54,21 @@ android {
 }
 
 dependencies {
-    // BOM Compose : aligne toutes les libs Compose
+    // BOM Compose alignÃ© (compatible Kotlin 1.9.20 / compiler 1.5.4)
     implementation(platform("androidx.compose:compose-bom:2023.10.01"))
 
     implementation("androidx.activity:activity-compose:1.8.2")
     implementation("androidx.compose.ui:ui")
     implementation("androidx.compose.ui:ui-tooling-preview")
     implementation("androidx.compose.foundation:foundation")
-    implementation("androidx.compose.material3:material3") // ← sans version, piloté par la BOM
+    implementation("androidx.compose.material3:material3:1.1.2")
 
-    // Icônes (obligatoire pour Icons.Filled.*)
+    // âœ… NÃ‰CESSAIRE pour le style XML "Theme.Material3.Light.NoActionBar"
+    implementation("com.google.android.material:material:1.11.0")
     implementation("androidx.compose.material:material-icons-extended")
-
     debugImplementation("androidx.compose.ui:ui-tooling")
     debugImplementation("androidx.compose.ui:ui-test-manifest")
 
     androidTestImplementation(platform("androidx.compose:compose-bom:2023.10.01"))
     androidTestImplementation("androidx.compose.ui:ui-test-junit4")
 }
-
-// ❌ Supprimé volontairement en Option A :
-// implementation("com.google.android.material:material:1.11.0")
