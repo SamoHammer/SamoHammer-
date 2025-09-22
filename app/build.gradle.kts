@@ -65,7 +65,7 @@ dependencies {
 
     // ✅ NÉCESSAIRE pour le style XML "Theme.Material3.Light.NoActionBar"
     implementation("com.google.android.material:material:1.11.0")
-
+    implementation("androidx.compose.material:material-icons-extended")
     debugImplementation("androidx.compose.ui:ui-tooling")
     debugImplementation("androidx.compose.ui:ui-test-manifest")
 
