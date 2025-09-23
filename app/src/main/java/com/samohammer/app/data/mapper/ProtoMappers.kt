@@ -1,7 +1,11 @@
 package com.samohammer.app.data.mapper
 
 import com.samohammer.app.model.*
-import com.samohammer.app.proto.*
+import com.samohammer.app.proto.AppState as AppStateProto
+import com.samohammer.app.proto.AttackProfile as AttackProfileProto
+import com.samohammer.app.proto.UnitEntry as UnitEntryProto
+import com.samohammer.app.proto.TargetConfig as TargetConfigProto
+import com.samohammer.app.proto.AttackType as AttackTypeProto
 import com.samohammer.app.util.newUuid
 
 /**
@@ -31,16 +35,16 @@ private fun AttackProfileProto.toDomain(): AttackProfile =
     AttackProfile(
         id = if (this.id.isNullOrBlank()) newUuid() else this.id,
         name = this.name,
-        attackType = this.attack_type.toDomain(),
+        attackType = this.attackType.toDomain(),
         models = this.models,
         attacks = this.attacks,
-        toHit = this.to_hit,
-        toWound = this.to_wound,
+        toHit = this.toHit,
+        toWound = this.toWound,
         rend = this.rend,
         damage = this.damage,
         active = this.active,
-        twoHits = this.two_hits,
-        autoW = this.auto_w,
+        twoHits = this.twoHits,
+        autoW = this.autoW,
         mortal = this.mortal
     )
 
@@ -85,9 +89,9 @@ private fun UnitEntry.toProto(): UnitEntryProto =
 // -----------------------
 private fun TargetConfigProto.toDomain(): TargetConfig =
     TargetConfig(
-        wardNeeded = this.ward_needed,
-        debuffHitEnabled = this.debuff_hit_enabled,
-        debuffHitValue = this.debuff_hit_value
+        wardNeeded = this.wardNeeded,
+        debuffHitEnabled = this.debuffHitEnabled,
+        debuffHitValue = this.debuffHitValue
     )
 
 private fun TargetConfig.toProto(): TargetConfigProto =
@@ -100,15 +104,15 @@ private fun TargetConfig.toProto(): TargetConfigProto =
 // -----------------------
 // AppState
 // -----------------------
-fun AppState.toDomain(): AppStateDomain =
+fun AppStateProto.toDomain(): AppStateDomain =
     AppStateDomain(
         units = this.unitsList.map { it.toDomain() },
         target = if (this.hasTarget()) this.target.toDomain() else TargetConfig(),
         schemaVersion = if (this.schemaVersion == 0) 1 else this.schemaVersion
     )
 
-fun AppStateDomain.toProto(): AppState =
-    AppState.newBuilder()
+fun AppStateDomain.toProto(): AppStateProto =
+    AppStateProto.newBuilder()
         .addAllUnits(units.map { it.toProto() })
         .setTarget(target.toProto())
         .setSchemaVersion(if (schemaVersion <= 0) 1 else schemaVersion)
