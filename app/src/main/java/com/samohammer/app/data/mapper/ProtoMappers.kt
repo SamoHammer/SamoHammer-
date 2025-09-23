@@ -20,7 +20,7 @@ import com.samohammer.app.util.newUuid
 private fun AttackTypeProto.toDomain(): AttackType = when (this) {
     AttackTypeProto.MELEE -> AttackType.MELEE
     AttackTypeProto.SHOOT -> AttackType.SHOOT
-    else -> AttackType.MELEE
+    else -> AttackType.MELEE // exhaustif (gère le cas inconnu)
 }
 
 private fun AttackType.toProto(): AttackTypeProto = when (this) {
