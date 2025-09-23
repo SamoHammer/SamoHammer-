@@ -1,0 +1,62 @@
+diff --git a/app/src/main/java/com/samohammer/app/MainActivity.kt b/app/src/main/java/com/samohammer/app/MainActivity.kt
+index 1234567..89abcde 100644
+--- a/app/src/main/java/com/samohammer/app/MainActivity.kt
++++ b/app/src/main/java/com/samohammer/app/MainActivity.kt
+@@ -456,35 +456,42 @@
+             if (expanded) {
+-                // Grille de champs (actuellement en plusieurs lignes)
+-                Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
+-                    Row(
+-                        horizontalArrangement = Arrangement.spacedBy(12.dp),
+-                        modifier = Modifier.fillMaxWidth()
+-                    ) {
+-                        NumberField(
+-                            label = "Size",
+-                            value = profile.models,
+-                            onValue = { v -> onChange(profile.copy(models = v.coerceAtLeast(0))) },
+-                            modifier = Modifier.width(90.dp)
+-                        )
+[...]
++                // Tous les champs regroupés sur une seule ligne (56.dp chacun)
++                Row(
++                    horizontalArrangement = Arrangement.spacedBy(8.dp),
++                    modifier = Modifier.fillMaxWidth()
++                ) {
++                    NumberField(
++                        label = "Size",
++                        value = profile.models,
++                        onValue = { v -> onChange(profile.copy(models = v.coerceAtLeast(0))) },
++                        modifier = Modifier.width(56.dp)
++                    )
++                    NumberField(
++                        label = "Atk",
++                        value = profile.attacks,
++                        onValue = { v -> onChange(profile.copy(attacks = v.coerceAtLeast(0))) },
++                        modifier = Modifier.width(56.dp)
++                    )
++                    GateField2to6(
++                        label = "Hit",
++                        value = profile.toHit,
++                        onValue = { v -> onChange(profile.copy(toHit = v)) },
++                        modifier = Modifier.width(56.dp)
++                    )
++                    GateField2to6(
++                        label = "Wnd",
++                        value = profile.toWound,
++                        onValue = { v -> onChange(profile.copy(toWound = v)) },
++                        modifier = Modifier.width(56.dp)
++                    )
++                    NumberField(
++                        label = "Rend",
++                        value = profile.rend,
++                        onValue = { v -> onChange(profile.copy(rend = v.coerceAtLeast(0))) },
++                        modifier = Modifier.width(56.dp)
++                    )
++                    NumberField(
++                        label = "Dmg",
++                        value = profile.damage,
++                        onValue = { v -> onChange(profile.copy(damage = v.coerceAtLeast(0))) },
++                        modifier = Modifier.width(56.dp)
++                    )
++                }
+             }
