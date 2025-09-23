@@ -171,7 +171,7 @@ private fun expectedDamageForProfile(p: AttackProfile, target: TargetConfig, bas
     val pw = pWound(p.toWound)
     val pu = pUnsaved(baseSave, p.rend)
     val ward = wardFactor(target.wardNeeded)
-    val evNon6 = phNonSix * pw * pu * p.damage
+    val evNon6 = phNon6 * pw * pu * p.damage
     val mult6 = if (p.twoHits) 2.0 else 1.0
     val pw6 = if (p.mortal || p.autoW) 1.0 else pw
     val pu6 = if (p.mortal) 1.0 else pu
