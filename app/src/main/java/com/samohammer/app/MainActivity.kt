@@ -183,8 +183,8 @@ private fun expectedDamageForUnit(u: UnitEntry, target: TargetConfig, baseSave: 
 private fun expectedDamageAll(units: List<UnitEntry>, target: TargetConfig, baseSave: Int?): Double =
     units.filter { it.active }.sumOf { expectedDamageForUnit(it, target, baseSave) }
 
-// -------------------------
-// Onglets
+    // -------------------------
+// Onglet Profils
 // -------------------------
 @Composable
 fun ProfilesTab(units: List<UnitEntry>, onUpdateUnits: (List<UnitEntry>) -> Unit) {
@@ -203,6 +203,7 @@ fun ProfilesTab(units: List<UnitEntry>, onUpdateUnits: (List<UnitEntry>) -> Unit
                         .padding(12.dp),
                     verticalArrangement = Arrangement.spacedBy(12.dp)
                 ) {
+                    // Ligne 1 : active + nom + chevron
                     Row(
                         verticalAlignment = Alignment.CenterVertically,
                         horizontalArrangement = Arrangement.spacedBy(12.dp),
@@ -231,6 +232,8 @@ fun ProfilesTab(units: List<UnitEntry>, onUpdateUnits: (List<UnitEntry>) -> Unit
                             Text(if (expanded) "▼" else "▶")
                         }
                     }
+
+                    // Ligne 2 : actions (Add Profile + Delete Unit)
                     Row(
                         modifier = Modifier.fillMaxWidth(),
                         horizontalArrangement = Arrangement.Start,
@@ -246,7 +249,9 @@ fun ProfilesTab(units: List<UnitEntry>, onUpdateUnits: (List<UnitEntry>) -> Unit
                                 )
                             }
                         ) { Text("Add Profile") }
+
                         Spacer(Modifier.width(12.dp))
+
                         TextButton(
                             onClick = {
                                 if (units.size > 1) {
@@ -255,6 +260,7 @@ fun ProfilesTab(units: List<UnitEntry>, onUpdateUnits: (List<UnitEntry>) -> Unit
                             }
                         ) { Text("Delete Unit") }
                     }
+
                     if (expanded) {
                         unit.profiles.forEachIndexed { pIndex, profile ->
                             ProfileEditor(
@@ -314,6 +320,7 @@ private fun ProfileEditor(
                 .padding(12.dp),
             verticalArrangement = Arrangement.spacedBy(12.dp)
         ) {
+            // Header du profil
             Row(
                 verticalAlignment = Alignment.CenterVertically,
                 horizontalArrangement = Arrangement.spacedBy(12.dp),
@@ -336,24 +343,28 @@ private fun ProfileEditor(
                         onChange(profile.copy(attackType = next))
                     }
                 ) {
-                    Text(text = if (profile.attackType == AttackType.MELEE) "Melee" else "Shoot")
+                    Text(if (profile.attackType == AttackType.MELEE) "Melee" else "Shoot")
                 }
                 TextButton(onClick = { expanded = !expanded }) {
                     Text(if (expanded) "▼" else "▶")
                 }
             }
+
+            // Bouton suppression du profil
             Row(
                 modifier = Modifier.fillMaxWidth(),
                 horizontalArrangement = Arrangement.Start
             ) {
                 TextButton(onClick = onRemove) { Text("Delete Profile") }
             }
+
             if (expanded) {
                 Row(
                     modifier = Modifier.fillMaxWidth(),
                     horizontalArrangement = Arrangement.spacedBy(16.dp),
                     verticalAlignment = Alignment.Top
                 ) {
+                    // Champs numériques (gauche)
                     Column(verticalArrangement = Arrangement.spacedBy(10.dp), modifier = Modifier.weight(1f)) {
                         Row(horizontalArrangement = Arrangement.spacedBy(12.dp), modifier = Modifier.fillMaxWidth()) {
                             TopLabeled("Size") { NumberField(profile.models) { v -> onChange(profile.copy(models = v)) } }
@@ -366,6 +377,7 @@ private fun ProfileEditor(
                             TopLabeled("Dmg") { NumberField(profile.damage) { v -> onChange(profile.copy(damage = v)) } }
                         }
                     }
+                    // Cases à cocher (droite)
                     Column(verticalArrangement = Arrangement.spacedBy(8.dp), horizontalAlignment = Alignment.Start) {
                         LabeledCheckbox("2Hits", profile.twoHits) { onChange(profile.copy(twoHits = it)) }
                         LabeledCheckbox("AutoW", profile.autoW) { onChange(profile.copy(autoW = it)) }
@@ -377,12 +389,13 @@ private fun ProfileEditor(
     }
 }
 
+// ---------- Champs numériques ----------
 @Composable
 private fun NumberField(value: Int, onValue: (Int) -> Unit) {
     OutlinedTextField(
         value = value.toString(),
         onValueChange = { txt ->
-            val digits = txt.filter { ch -> ch.isDigit() }
+            val digits = txt.filter { it.isDigit() }
             onValue(if (digits.isEmpty()) 0 else digits.toInt())
         },
         singleLine = true,
@@ -397,7 +410,7 @@ private fun GateField2to6(value: Int, onValue: (Int) -> Unit) {
     OutlinedTextField(
         value = text,
         onValueChange = { newText ->
-            val digits = newText.filter { ch -> ch.isDigit() }.take(1)
+            val digits = newText.filter { it.isDigit() }.take(1)
             text = digits
             val v = digits.toIntOrNull()
             if (v != null && v in 2..6) onValue(v)
@@ -410,7 +423,7 @@ private fun GateField2to6(value: Int, onValue: (Int) -> Unit) {
 }
 
 // -------------------------
-// Target Tab
+// Onglet Target
 // -------------------------
 @Composable
 fun TargetTab(target: TargetConfig, onUpdate: (TargetConfig) -> Unit) {
@@ -421,6 +434,8 @@ fun TargetTab(target: TargetConfig, onUpdate: (TargetConfig) -> Unit) {
         verticalArrangement = Arrangement.spacedBy(12.dp)
     ) {
         Text("Target buffs/debuffs", style = MaterialTheme.typography.titleMedium)
+
+        // Ward
         Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
             Text("Ward")
             var wardTxt by remember(target.wardNeeded) {
@@ -429,7 +444,7 @@ fun TargetTab(target: TargetConfig, onUpdate: (TargetConfig) -> Unit) {
             OutlinedTextField(
                 value = wardTxt,
                 onValueChange = { newText ->
-                    val digits = newText.filter { ch -> ch.isDigit() }.take(1)
+                    val digits = newText.filter { it.isDigit() }.take(1)
                     wardTxt = digits
                     val v = digits.toIntOrNull()
                     onUpdate(target.copy(wardNeeded = if (v != null && v in 2..6) v else 0))
@@ -441,6 +456,8 @@ fun TargetTab(target: TargetConfig, onUpdate: (TargetConfig) -> Unit) {
             )
             Text(text = if (target.wardNeeded in 2..6) "${target.wardNeeded}+" else "off")
         }
+
+        // Debuff to hit
         Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
             Checkbox(
                 checked = target.debuffHitEnabled,
@@ -452,7 +469,7 @@ fun TargetTab(target: TargetConfig, onUpdate: (TargetConfig) -> Unit) {
             OutlinedTextField(
                 value = target.debuffHitValue.toString(),
                 onValueChange = { newText ->
-                    val digits = newText.filter { ch -> ch.isDigit() }.take(1)
+                    val digits = newText.filter { it.isDigit() }.take(1)
                     val v = digits.toIntOrNull() ?: 0
                     onUpdate(target.copy(debuffHitValue = v.coerceIn(0, 3)))
                 },
@@ -463,13 +480,66 @@ fun TargetTab(target: TargetConfig, onUpdate: (TargetConfig) -> Unit) {
             )
             if (target.debuffHitEnabled) Text("−${target.debuffHitValue} to Hit")
         }
+
         Divider()
     }
 }
 
 // -------------------------
-// Simulation Tab
+// Onglet Simulations
 // -------------------------
 @Composable
 fun SimulationTab(units: List<UnitEntry>, target: TargetConfig) {
-    val activeUnits = units.filter { it.active }.take
+    val activeUnits = units.filter { it.active }.take(6)
+    Column(
+        modifier = Modifier
+            .fillMaxSize()
+            .padding(16.dp),
+        verticalArrangement = Arrangement.spacedBy(8.dp)
+    ) {
+        Text("Damage expectation by Save (per active unit, max 6)", style = MaterialTheme.typography.titleMedium)
+
+        if (activeUnits.isEmpty()) {
+            Spacer(Modifier.height(8.dp))
+            Text("No active unit.")
+            return@Column
+        }
+
+        // Header
+        Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(12.dp)) {
+            Text("Save", modifier = Modifier.width(70.dp))
+            activeUnits.forEach { u -> Text(u.name, modifier = Modifier.weight(1f), maxLines = 1) }
+        }
+        Divider()
+
+        val saves = listOf<Int?>(2, 3, 4, 5, 6, null)
+        saves.forEach { save ->
+            Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(12.dp)) {
+                val label = if (save == null) "No Save" else "${save}+"
+                Text(label, modifier = Modifier.width(70.dp))
+                activeUnits.forEach { u ->
+                    val dmg = expectedDamageForUnit(u, target, save)
+                    Text(String.format("%.2f", dmg), modifier = Modifier.weight(1f))
+                }
+            }
+            Divider()
+        }
+    }
+}
+
+/* -------------------------
+   Mapping Target UI <-> Domain
+   ------------------------- */
+private fun TargetConfig.toDomain(): com.samohammer.app.model.TargetConfig =
+    com.samohammer.app.model.TargetConfig(
+        wardNeeded = this.wardNeeded,
+        debuffHitEnabled = this.debuffHitEnabled,
+        debuffHitValue = this.debuffHitValue
+    )
+
+private fun com.samohammer.app.model.TargetConfig.toUi(): TargetConfig =
+    TargetConfig(
+        wardNeeded = this.wardNeeded,
+        debuffHitEnabled = this.debuffHitEnabled,
+        debuffHitValue = this.debuffHitValue
+    )
