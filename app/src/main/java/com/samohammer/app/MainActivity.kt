@@ -1,4 +1,4 @@
-// V1.2.3 — Champs compacts 50dp + champ "Weapon Profile" un peu plus long
+// V1.2.4 — Champs compacts 55dp + champ "Weapon Profile" un peu plus long
 // - Inputs: Size / Atk / Hit / Wnd / Rend / Dmg à 50.dp
 // - Champ "Weapon Profile" conserve weight(1f) (prend tout l’espace dispo sans gêner les boutons)
 // - Reste identique à V1.2.2 (simulation en colonnes par unité, etc.)
@@ -385,13 +385,13 @@ private fun ProfileEditor(
                             label = "Size",
                             value = profile.models,
                             onValue = { v -> onChange(profile.copy(models = v.coerceAtLeast(0))) },
-                            modifier = Modifier.width(50.dp)
+                            modifier = Modifier.width(55.dp)
                         )
                         NumberField(
                             label = "Atk",
                             value = profile.attacks,
                             onValue = { v -> onChange(profile.copy(attacks = v.coerceAtLeast(0))) },
-                            modifier = Modifier.width(50.dp)
+                            modifier = Modifier.width(55.dp)
                         )
                     }
                     Row(
@@ -402,13 +402,13 @@ private fun ProfileEditor(
                             label = "Hit",
                             value = profile.toHit,
                             onValue = { v -> onChange(profile.copy(toHit = v)) },
-                            modifier = Modifier.width(50.dp)
+                            modifier = Modifier.width(55.dp)
                         )
                         GateField2to6(
                             label = "Wnd",
                             value = profile.toWound,
                             onValue = { v -> onChange(profile.copy(toWound = v)) },
-                            modifier = Modifier.width(50.dp)
+                            modifier = Modifier.width(55.dp)
                         )
                     }
                     Row(
@@ -419,13 +419,13 @@ private fun ProfileEditor(
                             label = "Rend",
                             value = profile.rend,
                             onValue = { v -> onChange(profile.copy(rend = v.coerceAtLeast(0))) },
-                            modifier = Modifier.width(50.dp)
+                            modifier = Modifier.width(55.dp)
                         )
                         NumberField(
                             label = "Dmg",
                             value = profile.damage,
                             onValue = { v -> onChange(profile.copy(damage = v.coerceAtLeast(0))) },
-                            modifier = Modifier.width(50.dp)
+                            modifier = Modifier.width(55.dp)
                         )
                     }
                 }
