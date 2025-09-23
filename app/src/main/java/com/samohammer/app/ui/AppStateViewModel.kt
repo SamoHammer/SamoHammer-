@@ -20,8 +20,7 @@ class AppStateViewModel(
 ) : ViewModel() {
 
     /**
-     * StateFlow utilisable directement dans Compose via collectAsStateWithLifecycle().
-     * On démarre avec une valeur par défaut cohérente, le repo émettra la vraie valeur dès qu'elle est lue.
+     * StateFlow utilisable directement dans Compose via collectAsState()/collectAsStateWithLifecycle().
      */
     val state: StateFlow<AppStateDomain> = repo.appStateFlow.stateIn(
         scope = viewModelScope,
@@ -57,5 +56,16 @@ class AppStateViewModel(
 
     fun reset() {
         viewModelScope.launch { repo.reset() }
+    }
+
+    /**
+     * ⚠️ Méthode utilitaire pour les écrans qui manipulent une liste complète
+     * (ex: onUpdateUnits(...) dans MainActivity). On persiste toute la liste.
+     */
+    fun setUnits(newUnits: List<UnitEntry>) {
+        viewModelScope.launch {
+            val current = state.value
+            repo.save(current.copy(units = newUnits))
+        }
     }
 }
