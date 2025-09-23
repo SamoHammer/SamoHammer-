@@ -8,7 +8,7 @@ import com.samohammer.app.model.*
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.first
-import androidx.datastore.core.DataStore.updateData
+
 /**
  * Repository central pour l'état de l'application (units, target, etc.)
  * - Fournit un Flow<AppStateDomain> pour l'UI
@@ -34,7 +34,7 @@ class AppStateRepository(private val context: Context) {
     // Actions de haut niveau
     // -------------------------
 
-    /** Ajoute une nouvelle unité vide. */
+    /** Ajoute une nouvelle unité. */
     suspend fun addUnit(unit: UnitEntry) {
         context.appStateDataStore.updateData { proto ->
             val domain = proto.toDomain()
@@ -69,8 +69,12 @@ class AppStateRepository(private val context: Context) {
         }
     }
 
-    /** Reset complet (retour à état par défaut). */
+    /** Reset complet (valeur par défaut, compatible javalite). */
     suspend fun reset() {
-        context.appStateDataStore.updateData { it.defaultInstanceForType }
+        context.appStateDataStore.updateData {
+            com.samohammer.app.proto.AppState.newBuilder()
+                .setSchemaVersion(1)
+                .build()
+        }
     }
 }
