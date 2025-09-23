@@ -1,20 +1,25 @@
-// V1.2.8 — 3 cases à cocher à côté des attributs (2Hits / AutoW / Mortal)
-// - Conserve V1.2.7: labels au-dessus, champs 50dp, 2 lignes (3+3)
-// - Ajoute dans ProfileEditor une colonne de 3 checkboxes à droite des champs
-// - Moteur EV inchangé (les flags ne sont pas encore pris en compte dans le calcul)
+// V1.2.9 — Effets critiques implémentés dans le moteur
+// Specs:
+// - 2Hits: chaque 6 naturel pour toucher génère 2 jets pour blesser (double tentative), reste de la séquence normal
+// - AutoW: chaque 6 naturel pour toucher blesse automatiquement (bypass toWound); save/ward s'appliquent normalement
+// - Mortal: chaque 6 naturel pour toucher inflige directement les dégâts (ignore la save d'armure), ward s'applique
+// Combinaisons:
+// - Mortal > (prend le dessus sur) AutoW/2Hits: un 6 naturel devient des dégâts directs (pas de wound roll, pas de save).
+// - Sinon, un 6 naturel applique 2Hits (si coché) *et* AutoW (si coché): deux blessures auto si 2Hits+AutoW, puis save+ward.
+// NB: Le déclencheur est bien le 6 "naturel", i.e. sans modificateurs. On sépare donc P(6) = 1/6 du reste.
+// UI: basée sur V1.2.8 (labels au-dessus, champs 50dp, 3 cases 2Hits/AutoW/Mortal).
+
 package com.samohammer.app
 
 import android.os.Bundle
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
 
-// Layout
+// Layout & Compose
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.itemsIndexed
 import androidx.compose.foundation.text.KeyboardOptions
-
-// Material3
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.runtime.saveable.rememberSaveable
@@ -55,7 +60,7 @@ data class AttackProfile(
     val rend: Int = 0,       // "Rend" >= 0
     val damage: Int = 1,     // "Dmg"
     val active: Boolean = true,
-    // Nouveaux flags UI (non utilisés par le moteur pour l'instant)
+    // Flags UI
     val twoHits: Boolean = false,  // 2Hits
     val autoW: Boolean = false,    // AutoW
     val mortal: Boolean = false    // Mortal
@@ -84,10 +89,19 @@ private fun pGate(needed: Int): Double = when {
     else -> (7 - needed) / 6.0
 }
 
-private fun pHit(needed: Int, debuff: Int): Double {
-    val eff = clamp2to6(needed + debuff)
-    return pGate(eff)
+/**
+ * On sépare la proba du 6 naturel (1/6) des autres jets (1..5) pour gérer les effets critiques.
+ */
+private fun effectiveHitThreshold(baseNeeded: Int, debuff: Int): Int =
+    clamp2to6(baseNeeded + debuff)
+
+/** Proba de toucher sur {1..5} uniquement (hors 6). */
+private fun pHitNonSix(effNeeded: Int): Double {
+    // Réussites parmi 1..5 = valeurs >= effNeeded et <= 5
+    val successes = (6 - effNeeded).coerceAtLeast(0)
+    return successes / 6.0
 }
+
 private fun pWound(needed: Int): Double = pGate(needed)
 
 private fun pUnsaved(baseSave: Int?, rend: Int): Double {
@@ -102,15 +116,42 @@ private fun wardFactor(wardNeeded: Int): Double {
     return 1.0 - pGate(wardNeeded)
 }
 
+/**
+ * EV avec effets critiques (sur 6 naturel pour toucher).
+ * EV = A * [ ph_non6 * pw * pu * D  +  p6 * mult6 * pw6 * pu6 * D ] * W
+ *   - p6 = 1/6
+ *   - mult6 = 2 si twoHits sinon 1
+ *   - pw6 = 1 si autoW ou mortal, sinon pw
+ *   - pu6 = 1 si mortal (ignore save), sinon pu
+ *   - W = wardFactor
+ */
 private fun expectedDamageForProfile(p: AttackProfile, target: TargetConfig, baseSave: Int?): Double {
     if (!p.active) return 0.0
+
     val attacks = max(p.models, 0) * max(p.attacks, 0)
     if (attacks == 0) return 0.0
-    val ph = pHit(p.toHit, if (target.debuffHitEnabled) target.debuffHitValue else 0)
+
+    val debuff = if (target.debuffHitEnabled) target.debuffHitValue else 0
+    val effHit = effectiveHitThreshold(p.toHit, debuff)
+
+    val p6 = 1.0 / 6.0
+    val phNon6 = pHitNonSix(effHit)
+
+    // Probabilités de base
     val pw = pWound(p.toWound)
     val pu = pUnsaved(baseSave, p.rend)
     val ward = wardFactor(target.wardNeeded)
-    return attacks * ph * pw * pu * p.damage * ward
+
+    // Contribution des jets != 6 (pas d'effets critiques)
+    val evNon6 = phNon6 * pw * pu * p.damage
+
+    // Contribution des 6 naturels
+    val mult6 = if (p.twoHits) 2.0 else 1.0
+    val pw6 = if (p.mortal || p.autoW) 1.0 else pw
+    val pu6 = if (p.mortal) 1.0 else pu
+    val ev6 = p6 * mult6 * pw6 * pu6 * p.damage
+
+    return attacks * (evNon6 + ev6) * ward
 }
 
 private fun expectedDamageForUnit(u: UnitEntry, target: TargetConfig, baseSave: Int?): Double {
@@ -129,9 +170,7 @@ fun SamoHammerApp() {
     var selectedTab by remember { mutableStateOf(0) }
     val tabs = listOf("Profils", "Target", "Simulations")
 
-    var units by remember {
-        mutableStateOf(listOf(UnitEntry(name = "Unit 1")))
-    }
+    var units by remember { mutableStateOf(listOf(UnitEntry(name = "Unit 1"))) }
     var target by remember { mutableStateOf(TargetConfig()) }
 
     Scaffold(
@@ -231,6 +270,7 @@ fun ProfilesTab(units: List<UnitEntry>, onUpdateUnits: (List<UnitEntry>) -> Unit
                                     onUpdateUnits(units.toMutableList().also { list ->
                                         val newProfiles = unit.profiles.toMutableList().also {
                                             if (it.size > 1) it.removeAt(pIndex)
+                                            // si 1 seul profil restant, on évite de supprimer
                                         }
                                         list[unitIndex] = unit.copy(profiles = newProfiles)
                                     })
@@ -311,29 +351,17 @@ private fun ProfileEditor(
                     horizontalArrangement = Arrangement.spacedBy(16.dp),
                     verticalAlignment = Alignment.Top
                 ) {
-                    // Colonne gauche: 2 lignes de 3 champs
+                    // Colonne gauche: 2 lignes de 3 champs (labels au-dessus, 50dp)
                     Column(verticalArrangement = Arrangement.spacedBy(10.dp), modifier = Modifier.weight(1f)) {
                         Row(horizontalArrangement = Arrangement.spacedBy(12.dp), modifier = Modifier.fillMaxWidth()) {
-                            TopLabeled("Size") {
-                                NumberField(profile.models) { v -> onChange(profile.copy(models = v)) }
-                            }
-                            TopLabeled("Atk") {
-                                NumberField(profile.attacks) { v -> onChange(profile.copy(attacks = v)) }
-                            }
-                            TopLabeled("Hit") {
-                                GateField2to6(profile.toHit) { v -> onChange(profile.copy(toHit = v)) }
-                            }
+                            TopLabeled("Size") { NumberField(profile.models) { v -> onChange(profile.copy(models = v)) } }
+                            TopLabeled("Atk") { NumberField(profile.attacks) { v -> onChange(profile.copy(attacks = v)) } }
+                            TopLabeled("Hit") { GateField2to6(profile.toHit) { v -> onChange(profile.copy(toHit = v)) } }
                         }
                         Row(horizontalArrangement = Arrangement.spacedBy(12.dp), modifier = Modifier.fillMaxWidth()) {
-                            TopLabeled("Wnd") {
-                                GateField2to6(profile.toWound) { v -> onChange(profile.copy(toWound = v)) }
-                            }
-                            TopLabeled("Rend") {
-                                NumberField(profile.rend) { v -> onChange(profile.copy(rend = v)) }
-                            }
-                            TopLabeled("Dmg") {
-                                NumberField(profile.damage) { v -> onChange(profile.copy(damage = v)) }
-                            }
+                            TopLabeled("Wnd") { GateField2to6(profile.toWound) { v -> onChange(profile.copy(toWound = v)) } }
+                            TopLabeled("Rend") { NumberField(profile.rend) { v -> onChange(profile.copy(rend = v)) } }
+                            TopLabeled("Dmg") { NumberField(profile.damage) { v -> onChange(profile.copy(damage = v)) } }
                         }
                     }
                     // Colonne droite: 3 cases cochables
