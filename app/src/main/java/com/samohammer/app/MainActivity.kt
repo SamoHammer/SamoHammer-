@@ -1,7 +1,7 @@
-// V1.2.4 — Champs compacts 55dp + champ "Weapon Profile" un peu plus long
-// - Inputs: Size / Atk / Hit / Wnd / Rend / Dmg à 50.dp
-// - Champ "Weapon Profile" conserve weight(1f) (prend tout l’espace dispo sans gêner les boutons)
-// - Reste identique à V1.2.2 (simulation en colonnes par unité, etc.)
+// V1.2.5 — Attributs sur une seule ligne (Size / Atk / Hit / Wnd / Rend / Dmg)
+// - Tous les champs numériques sont alignés horizontalement dans un seul Row
+// - Champs compacts ~57dp chacun, spacing homogène
+// - Le reste identique à V1.2.4 (3 onglets, moteur EV, etc.)
 
 package com.samohammer.app
 
@@ -375,59 +375,47 @@ private fun ProfileEditor(
             }
 
             if (expanded) {
-                // Grille de champs (compacts 50dp)
-                Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
-                    Row(
-                        horizontalArrangement = Arrangement.spacedBy(12.dp),
-                        modifier = Modifier.fillMaxWidth()
-                    ) {
-                        NumberField(
-                            label = "Size",
-                            value = profile.models,
-                            onValue = { v -> onChange(profile.copy(models = v.coerceAtLeast(0))) },
-                            modifier = Modifier.width(57.dp)
-                        )
-                        NumberField(
-                            label = "Atk",
-                            value = profile.attacks,
-                            onValue = { v -> onChange(profile.copy(attacks = v.coerceAtLeast(0))) },
-                            modifier = Modifier.width(57.dp)
-                        )
-                    }
-                    Row(
-                        horizontalArrangement = Arrangement.spacedBy(12.dp),
-                        modifier = Modifier.fillMaxWidth()
-                    ) {
-                        GateField2to6(
-                            label = "Hit",
-                            value = profile.toHit,
-                            onValue = { v -> onChange(profile.copy(toHit = v)) },
-                            modifier = Modifier.width(57.dp)
-                        )
-                        GateField2to6(
-                            label = "Wnd",
-                            value = profile.toWound,
-                            onValue = { v -> onChange(profile.copy(toWound = v)) },
-                            modifier = Modifier.width(57.dp)
-                        )
-                    }
-                    Row(
-                        horizontalArrangement = Arrangement.spacedBy(12.dp),
-                        modifier = Modifier.fillMaxWidth()
-                    ) {
-                        NumberField(
-                            label = "Rend",
-                            value = profile.rend,
-                            onValue = { v -> onChange(profile.copy(rend = v.coerceAtLeast(0))) },
-                            modifier = Modifier.width(57.dp)
-                        )
-                        NumberField(
-                            label = "Dmg",
-                            value = profile.damage,
-                            onValue = { v -> onChange(profile.copy(damage = v.coerceAtLeast(0))) },
-                            modifier = Modifier.width(57.dp)
-                        )
-                    }
+                // UNIQUE LIGNE D'ATTRIBUTS — 6 champs alignés sur une seule ligne
+                Row(
+                    horizontalArrangement = Arrangement.spacedBy(12.dp),
+                    modifier = Modifier.fillMaxWidth()
+                ) {
+                    NumberField(
+                        label = "Size",
+                        value = profile.models,
+                        onValue = { v -> onChange(profile.copy(models = v.coerceAtLeast(0))) },
+                        modifier = Modifier.width(57.dp)
+                    )
+                    NumberField(
+                        label = "Atk",
+                        value = profile.attacks,
+                        onValue = { v -> onChange(profile.copy(attacks = v.coerceAtLeast(0))) },
+                        modifier = Modifier.width(57.dp)
+                    )
+                    GateField2to6(
+                        label = "Hit",
+                        value = profile.toHit,
+                        onValue = { v -> onChange(profile.copy(toHit = v)) },
+                        modifier = Modifier.width(57.dp)
+                    )
+                    GateField2to6(
+                        label = "Wnd",
+                        value = profile.toWound,
+                        onValue = { v -> onChange(profile.copy(toWound = v)) },
+                        modifier = Modifier.width(57.dp)
+                    )
+                    NumberField(
+                        label = "Rend",
+                        value = profile.rend,
+                        onValue = { v -> onChange(profile.copy(rend = v.coerceAtLeast(0))) },
+                        modifier = Modifier.width(57.dp)
+                    )
+                    NumberField(
+                        label = "Dmg",
+                        value = profile.damage,
+                        onValue = { v -> onChange(profile.copy(damage = v.coerceAtLeast(0))) },
+                        modifier = Modifier.width(57.dp)
+                    )
                 }
             }
         }
