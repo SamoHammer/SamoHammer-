@@ -1,8 +1,5 @@
-// V1.2.10 — Restaure "Add Profile" + "Delete Unit" sous le header de chaque unité
-// - Conserve V1.2.9 : moteur avec effets critiques sur 6 naturel (2Hits / AutoW / Mortal)
-// - UI : labels au-dessus, champs 50dp, 2 lignes (3+3), 3 cases à cocher à droite
-// - Profil: bouton Delete dans ProfileEditor conservé
-// - Unité: ligne d’actions restaurée (Add Profile + Delete Unit)
+// V1.2.10 — UI stable + moteur critique
+// Ajout : persistance Units + Target via AppStateViewModel (DataStore)
 
 package com.samohammer.app
 
@@ -36,7 +33,6 @@ import com.samohammer.app.ui.AppStateViewModelFactory
 // -------------------------
 class MainActivity : ComponentActivity() {
 
-    // ViewModel persistant (DataStore) – applicationContext pour éviter fuite d’Activity
     private val appStateVM: AppStateViewModel by viewModels {
         AppStateViewModelFactory(applicationContext)
     }
@@ -46,19 +42,16 @@ class MainActivity : ComponentActivity() {
         setContent {
             SamoHammerTheme {
 
-                // --- État UI local (comme avant) ---
                 var selectedTab by remember { mutableStateOf(0) }
                 val tabs = listOf("Profils", "Target", "Simulations")
 
                 var units by remember { mutableStateOf(listOf(UnitEntry(name = "Unit 1"))) }
                 var target by remember { mutableStateOf(TargetConfig()) }
 
-                // --- Lecture de l'état persistant (Target uniquement pour l’instant) ---
-                // On observe le flow du VM et on synchronise la Target locale
+                // --- Lecture de l'état persistant (Units + Target) ---
                 val persisted by appStateVM.state.collectAsState()
-                LaunchedEffect(persisted.target) {
-                    target = persisted.target.toUi()
-                }
+                LaunchedEffect(persisted.units) { units = persisted.units }
+                LaunchedEffect(persisted.target) { target = persisted.target.toUi() }
 
                 Scaffold(
                     topBar = {
@@ -75,8 +68,9 @@ class MainActivity : ComponentActivity() {
                     floatingActionButton = {
                         if (selectedTab == 0) {
                             FloatingActionButton(onClick = {
-                                units = units + UnitEntry(name = "Unit ${units.size + 1}")
-                                // NOTE: persistance des unités → étape suivante
+                                val newUnits = units + UnitEntry(name = "Unit ${units.size + 1}")
+                                units = newUnits
+                                appStateVM.setUnits(newUnits) // persiste
                             }) { Text("+") }
                         }
                     }
@@ -87,15 +81,14 @@ class MainActivity : ComponentActivity() {
                                 units = units,
                                 onUpdateUnits = { newUnits ->
                                     units = newUnits
-                                    // NOTE: persistance des unités → étape suivante
+                                    appStateVM.setUnits(newUnits) // persiste
                                 }
                             )
                             1 -> TargetTab(
                                 target = target,
                                 onUpdate = { t ->
                                     target = t
-                                    // 🔐 Persistance immédiate de la Target
-                                    appStateVM.updateTarget(t.toDomain())
+                                    appStateVM.updateTarget(t.toDomain()) // persiste
                                 }
                             )
                             2 -> SimulationTab(units = units, target = target)
@@ -115,17 +108,16 @@ enum class AttackType { MELEE, SHOOT }
 data class AttackProfile(
     val name: String = "Weapon Profile",
     val attackType: AttackType = AttackType.MELEE,
-    val models: Int = 1,     // "Size"
-    val attacks: Int = 1,    // "Atk"
-    val toHit: Int = 4,      // "Hit"  2..6
-    val toWound: Int = 4,    // "Wnd"  2..6
-    val rend: Int = 0,       // "Rend" >= 0
-    val damage: Int = 1,     // "Dmg"
+    val models: Int = 1,
+    val attacks: Int = 1,
+    val toHit: Int = 4,
+    val toWound: Int = 4,
+    val rend: Int = 0,
+    val damage: Int = 1,
     val active: Boolean = true,
-    // Flags UI pour effets critiques (6 naturel)
-    val twoHits: Boolean = false,  // 2Hits
-    val autoW: Boolean = false,    // AutoW
-    val mortal: Boolean = false    // Mortal
+    val twoHits: Boolean = false,
+    val autoW: Boolean = false,
+    val mortal: Boolean = false
 )
 
 data class UnitEntry(
@@ -135,96 +127,64 @@ data class UnitEntry(
 )
 
 data class TargetConfig(
-    val wardNeeded: Int = 0,          // 0 = off, sinon 2..6
+    val wardNeeded: Int = 0,
     val debuffHitEnabled: Boolean = false,
-    val debuffHitValue: Int = 1       // 0..3
+    val debuffHitValue: Int = 1
 )
 
 // -------------------------
-// Moteur (V1.2.9 conservé)
+// Moteur
 // -------------------------
 private fun clamp2to6(x: Int) = x.coerceIn(2, 6)
-
 private fun pGate(needed: Int): Double = when {
     needed <= 1 -> 1.0
     needed >= 7 -> 0.0
     else -> (7 - needed) / 6.0
 }
-
-/** Seuil de touche après debuff, en 2..6. */
 private fun effectiveHitThreshold(baseNeeded: Int, debuff: Int): Int =
     clamp2to6(baseNeeded + debuff)
-
-/** Proba de toucher sur {1..5} uniquement (hors 6). */
 private fun pHitNonSix(effNeeded: Int): Double {
-    // Réussites parmi 1..5 = valeurs >= effNeeded et <= 5 → max(0, 6 - effNeeded)
     val successes = (6 - effNeeded).coerceAtLeast(0)
     return successes / 6.0
 }
-
 private fun pWound(needed: Int): Double = pGate(needed)
-
 private fun pUnsaved(baseSave: Int?, rend: Int): Double {
-    if (baseSave == null) return 1.0 // pas de save
+    if (baseSave == null) return 1.0
     val eff = baseSave + rend
     if (eff >= 7) return 1.0
     return 1.0 - pGate(eff)
 }
-
 private fun wardFactor(wardNeeded: Int): Double {
     if (wardNeeded !in 2..6) return 1.0
     return 1.0 - pGate(wardNeeded)
 }
-
-/**
- * EV avec effets critiques (sur 6 naturel pour toucher).
- * EV = A * [ ph_non6 * pw * pu * D  +  p6 * mult6 * pw6 * pu6 * D ] * W
- *   - p6 = 1/6
- *   - mult6 = 2 si twoHits sinon 1
- *   - pw6 = 1 si autoW ou mortal, sinon pw
- *   - pu6 = 1 si mortal (ignore save), sinon pu
- *   - W = wardFactor
- *   - Si Mortal est vrai, il "prend le dessus" sur AutoW/2Hits pour le traitement de la save.
- */
 private fun expectedDamageForProfile(p: AttackProfile, target: TargetConfig, baseSave: Int?): Double {
     if (!p.active) return 0.0
-
     val attacks = max(p.models, 0) * max(p.attacks, 0)
     if (attacks == 0) return 0.0
-
     val debuff = if (target.debuffHitEnabled) target.debuffHitValue else 0
     val effHit = effectiveHitThreshold(p.toHit, debuff)
-
     val p6 = 1.0 / 6.0
     val phNon6 = pHitNonSix(effHit)
-
-    // Probabilités de base
     val pw = pWound(p.toWound)
     val pu = pUnsaved(baseSave, p.rend)
     val ward = wardFactor(target.wardNeeded)
-
-    // Jets != 6 (pas d'effets critiques)
     val evNon6 = phNon6 * pw * pu * p.damage
-
-    // Jets = 6 (effets critiques)
     val mult6 = if (p.twoHits) 2.0 else 1.0
     val pw6 = if (p.mortal || p.autoW) 1.0 else pw
     val pu6 = if (p.mortal) 1.0 else pu
     val ev6 = p6 * mult6 * pw6 * pu6 * p.damage
-
     return attacks * (evNon6 + ev6) * ward
 }
-
 private fun expectedDamageForUnit(u: UnitEntry, target: TargetConfig, baseSave: Int?): Double {
     if (!u.active) return 0.0
     return u.profiles.sumOf { expectedDamageForProfile(it, target, baseSave) }
 }
-
 private fun expectedDamageAll(units: List<UnitEntry>, target: TargetConfig, baseSave: Int?): Double =
     units.filter { it.active }.sumOf { expectedDamageForUnit(it, target, baseSave) }
 
 // -------------------------
-// Onglet Profils
+// Onglets
 // -------------------------
 @Composable
 fun ProfilesTab(units: List<UnitEntry>, onUpdateUnits: (List<UnitEntry>) -> Unit) {
@@ -237,14 +197,12 @@ fun ProfilesTab(units: List<UnitEntry>, onUpdateUnits: (List<UnitEntry>) -> Unit
         itemsIndexed(units) { unitIndex, unit ->
             ElevatedCard {
                 var expanded by rememberSaveable(unitIndex) { mutableStateOf(true) }
-
                 Column(
                     modifier = Modifier
                         .fillMaxWidth()
                         .padding(12.dp),
                     verticalArrangement = Arrangement.spacedBy(12.dp)
                 ) {
-                    // LIGNE 1 : active + nom + chevron
                     Row(
                         verticalAlignment = Alignment.CenterVertically,
                         horizontalArrangement = Arrangement.spacedBy(12.dp),
@@ -273,8 +231,6 @@ fun ProfilesTab(units: List<UnitEntry>, onUpdateUnits: (List<UnitEntry>) -> Unit
                             Text(if (expanded) "▼" else "▶")
                         }
                     }
-
-                    // 🔙 LIGNE 2 : actions restaurées (Add Profile + Delete Unit)
                     Row(
                         modifier = Modifier.fillMaxWidth(),
                         horizontalArrangement = Arrangement.Start,
@@ -290,9 +246,7 @@ fun ProfilesTab(units: List<UnitEntry>, onUpdateUnits: (List<UnitEntry>) -> Unit
                                 )
                             }
                         ) { Text("Add Profile") }
-
                         Spacer(Modifier.width(12.dp))
-
                         TextButton(
                             onClick = {
                                 if (units.size > 1) {
@@ -301,7 +255,6 @@ fun ProfilesTab(units: List<UnitEntry>, onUpdateUnits: (List<UnitEntry>) -> Unit
                             }
                         ) { Text("Delete Unit") }
                     }
-
                     if (expanded) {
                         unit.profiles.forEachIndexed { pIndex, profile ->
                             ProfileEditor(
@@ -355,14 +308,12 @@ private fun ProfileEditor(
 ) {
     ElevatedCard(modifier = Modifier.fillMaxWidth()) {
         var expanded by rememberSaveable(profile.hashCode()) { mutableStateOf(true) }
-
         Column(
             modifier = Modifier
                 .fillMaxWidth()
                 .padding(12.dp),
             verticalArrangement = Arrangement.spacedBy(12.dp)
         ) {
-            // Ligne du header du profil
             Row(
                 verticalAlignment = Alignment.CenterVertically,
                 horizontalArrangement = Arrangement.spacedBy(12.dp),
@@ -391,22 +342,18 @@ private fun ProfileEditor(
                     Text(if (expanded) "▼" else "▶")
                 }
             }
-
-            // Bouton de suppression du profil
             Row(
                 modifier = Modifier.fillMaxWidth(),
                 horizontalArrangement = Arrangement.Start
             ) {
                 TextButton(onClick = onRemove) { Text("Delete Profile") }
             }
-
             if (expanded) {
                 Row(
                     modifier = Modifier.fillMaxWidth(),
                     horizontalArrangement = Arrangement.spacedBy(16.dp),
                     verticalAlignment = Alignment.Top
                 ) {
-                    // Colonne gauche: 2 lignes de 3 champs (labels au-dessus, 50dp)
                     Column(verticalArrangement = Arrangement.spacedBy(10.dp), modifier = Modifier.weight(1f)) {
                         Row(horizontalArrangement = Arrangement.spacedBy(12.dp), modifier = Modifier.fillMaxWidth()) {
                             TopLabeled("Size") { NumberField(profile.models) { v -> onChange(profile.copy(models = v)) } }
@@ -419,7 +366,6 @@ private fun ProfileEditor(
                             TopLabeled("Dmg") { NumberField(profile.damage) { v -> onChange(profile.copy(damage = v)) } }
                         }
                     }
-                    // Colonne droite: 3 cases cochables (critiques)
                     Column(verticalArrangement = Arrangement.spacedBy(8.dp), horizontalAlignment = Alignment.Start) {
                         LabeledCheckbox("2Hits", profile.twoHits) { onChange(profile.copy(twoHits = it)) }
                         LabeledCheckbox("AutoW", profile.autoW) { onChange(profile.copy(autoW = it)) }
@@ -431,7 +377,6 @@ private fun ProfileEditor(
     }
 }
 
-// ---------- Champs numériques ----------
 @Composable
 private fun NumberField(value: Int, onValue: (Int) -> Unit) {
     OutlinedTextField(
@@ -465,7 +410,7 @@ private fun GateField2to6(value: Int, onValue: (Int) -> Unit) {
 }
 
 // -------------------------
-// Onglet Target
+// Target Tab
 // -------------------------
 @Composable
 fun TargetTab(target: TargetConfig, onUpdate: (TargetConfig) -> Unit) {
@@ -476,8 +421,6 @@ fun TargetTab(target: TargetConfig, onUpdate: (TargetConfig) -> Unit) {
         verticalArrangement = Arrangement.spacedBy(12.dp)
     ) {
         Text("Target buffs/debuffs", style = MaterialTheme.typography.titleMedium)
-
-        // Ward
         Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
             Text("Ward")
             var wardTxt by remember(target.wardNeeded) {
@@ -498,8 +441,6 @@ fun TargetTab(target: TargetConfig, onUpdate: (TargetConfig) -> Unit) {
             )
             Text(text = if (target.wardNeeded in 2..6) "${target.wardNeeded}+" else "off")
         }
-
-        // Debuff to hit
         Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
             Checkbox(
                 checked = target.debuffHitEnabled,
@@ -522,67 +463,13 @@ fun TargetTab(target: TargetConfig, onUpdate: (TargetConfig) -> Unit) {
             )
             if (target.debuffHitEnabled) Text("−${target.debuffHitValue} to Hit")
         }
-
         Divider()
     }
 }
 
 // -------------------------
-// Onglet Simulations
+// Simulation Tab
 // -------------------------
 @Composable
 fun SimulationTab(units: List<UnitEntry>, target: TargetConfig) {
-    val activeUnits = units.filter { it.active }.take(6)
-    Column(
-        modifier = Modifier
-            .fillMaxSize()
-            .padding(16.dp),
-        verticalArrangement = Arrangement.spacedBy(8.dp)
-    ) {
-        Text("Damage expectation by Save (per active unit, max 6)", style = MaterialTheme.typography.titleMedium)
-
-        if (activeUnits.isEmpty()) {
-            Spacer(Modifier.height(8.dp))
-            Text("No active unit.")
-            return@Column
-        }
-
-        // Header
-        Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(12.dp)) {
-            Text("Save", modifier = Modifier.width(70.dp))
-            activeUnits.forEach { u -> Text(u.name, modifier = Modifier.weight(1f), maxLines = 1) }
-        }
-        Divider()
-
-        val saves = listOf<Int?>(2, 3, 4, 5, 6, null)
-        saves.forEach { save ->
-            Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(12.dp)) {
-                val label = if (save == null) "No Save" else "${save}+"
-                Text(label, modifier = Modifier.width(70.dp))
-                activeUnits.forEach { u ->
-                    val dmg = expectedDamageForUnit(u, target, save)
-                    Text(String.format("%.2f", dmg), modifier = Modifier.weight(1f))
-                }
-            }
-            Divider()
-        }
-    }
-}
-
-/* -------------------------
-   Mapping Target UI <-> Domain
-   ------------------------- */
-
-private fun TargetConfig.toDomain(): com.samohammer.app.model.TargetConfig =
-    com.samohammer.app.model.TargetConfig(
-        wardNeeded = this.wardNeeded,
-        debuffHitEnabled = this.debuffHitEnabled,
-        debuffHitValue = this.debuffHitValue
-    )
-
-private fun com.samohammer.app.model.TargetConfig.toUi(): TargetConfig =
-    TargetConfig(
-        wardNeeded = this.wardNeeded,
-        debuffHitEnabled = this.debuffHitEnabled,
-        debuffHitValue = this.debuffHitValue
-    )
+    val activeUnits = units.filter { it.active }.take
