@@ -385,13 +385,13 @@ private fun ProfileEditor(
                             label = "Size",
                             value = profile.models,
                             onValue = { v -> onChange(profile.copy(models = v.coerceAtLeast(0))) },
-                            modifier = Modifier.width(55.dp)
+                            modifier = Modifier.width(57.dp)
                         )
                         NumberField(
                             label = "Atk",
                             value = profile.attacks,
                             onValue = { v -> onChange(profile.copy(attacks = v.coerceAtLeast(0))) },
-                            modifier = Modifier.width(55.dp)
+                            modifier = Modifier.width(57.dp)
                         )
                     }
                     Row(
@@ -402,13 +402,13 @@ private fun ProfileEditor(
                             label = "Hit",
                             value = profile.toHit,
                             onValue = { v -> onChange(profile.copy(toHit = v)) },
-                            modifier = Modifier.width(55.dp)
+                            modifier = Modifier.width(57.dp)
                         )
                         GateField2to6(
                             label = "Wnd",
                             value = profile.toWound,
                             onValue = { v -> onChange(profile.copy(toWound = v)) },
-                            modifier = Modifier.width(55.dp)
+                            modifier = Modifier.width(57.dp)
                         )
                     }
                     Row(
@@ -419,13 +419,13 @@ private fun ProfileEditor(
                             label = "Rend",
                             value = profile.rend,
                             onValue = { v -> onChange(profile.copy(rend = v.coerceAtLeast(0))) },
-                            modifier = Modifier.width(55.dp)
+                            modifier = Modifier.width(57.dp)
                         )
                         NumberField(
                             label = "Dmg",
                             value = profile.damage,
                             onValue = { v -> onChange(profile.copy(damage = v.coerceAtLeast(0))) },
-                            modifier = Modifier.width(55.dp)
+                            modifier = Modifier.width(57.dp)
                         )
                     }
                 }
