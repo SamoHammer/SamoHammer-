@@ -1,7 +1,8 @@
-// V1.2.6 — Attributs sur deux lignes (3 champs par ligne)
-// - Première ligne : Size / Atk / Hit
-// - Deuxième ligne : Wnd / Rend / Dmg
-// - Le reste identique à V1.2.4 (3 onglets, moteur EV, etc.)
+// V1.2.7 — Labels au-dessus des champs + champs à 50dp de hauteur
+// - Deux lignes (3 + 3) : Size/Atk/Hit puis Wnd/Rend/Dmg
+// - Les labels sont rendus au-dessus des rectangles de valeur
+// - Hauteur des champs: 50.dp (compact)
+// - Reste identique (3 onglets, moteur EV, etc.)
 
 package com.samohammer.app
 
@@ -132,7 +133,7 @@ private fun wardFactor(wardNeeded: Int): Double {
 
 private fun expectedDamageForProfile(p: AttackProfile, target: TargetConfig, baseSave: Int?): Double {
     if (!p.active) return 0.0
-    val attacks = kotlin.math.max(p.models, 0) * kotlin.math.max(p.attacks, 0)
+    val attacks = max(p.models, 0) * max(p.attacks, 0)
     if (attacks == 0) return 0.0
     val ph = pHit(p.toHit, if (target.debuffHitEnabled) target.debuffHitValue else 0)
     val pw = pWound(p.toWound)
@@ -321,6 +322,14 @@ fun ProfilesTab(units: List<UnitEntry>, onUpdateUnits: (List<UnitEntry>) -> Unit
 }
 
 @Composable
+private fun TopLabeled(label: String, content: @Composable () -> Unit) {
+    Column(horizontalAlignment = Alignment.Start) {
+        Text(label, style = MaterialTheme.typography.labelSmall)
+        content()
+    }
+}
+
+@Composable
 private fun ProfileEditor(
     profile: AttackProfile,
     onChange: (AttackProfile) -> Unit,
@@ -379,47 +388,59 @@ private fun ProfileEditor(
                         horizontalArrangement = Arrangement.spacedBy(12.dp),
                         modifier = Modifier.fillMaxWidth()
                     ) {
-                        NumberField(
-                            label = "Size",
-                            value = profile.models,
-                            onValue = { v -> onChange(profile.copy(models = v.coerceAtLeast(0))) },
-                            modifier = Modifier.width(57.dp)
-                        )
-                        NumberField(
-                            label = "Atk",
-                            value = profile.attacks,
-                            onValue = { v -> onChange(profile.copy(attacks = v.coerceAtLeast(0))) },
-                            modifier = Modifier.width(57.dp)
-                        )
-                        GateField2to6(
-                            label = "Hit",
-                            value = profile.toHit,
-                            onValue = { v -> onChange(profile.copy(toHit = v)) },
-                            modifier = Modifier.width(57.dp)
-                        )
+                        TopLabeled("Size") {
+                            NumberField(
+                                label = null,
+                                value = profile.models,
+                                onValue = { v -> onChange(profile.copy(models = v.coerceAtLeast(0))) },
+                                modifier = Modifier.width(57.dp).height(50.dp)
+                            )
+                        }
+                        TopLabeled("Atk") {
+                            NumberField(
+                                label = null,
+                                value = profile.attacks,
+                                onValue = { v -> onChange(profile.copy(attacks = v.coerceAtLeast(0))) },
+                                modifier = Modifier.width(57.dp).height(50.dp)
+                            )
+                        }
+                        TopLabeled("Hit") {
+                            GateField2to6(
+                                label = null,
+                                value = profile.toHit,
+                                onValue = { v -> onChange(profile.copy(toHit = v)) },
+                                modifier = Modifier.width(57.dp).height(50.dp)
+                            )
+                        }
                     }
                     Row(
                         horizontalArrangement = Arrangement.spacedBy(12.dp),
                         modifier = Modifier.fillMaxWidth()
                     ) {
-                        GateField2to6(
-                            label = "Wnd",
-                            value = profile.toWound,
-                            onValue = { v -> onChange(profile.copy(toWound = v)) },
-                            modifier = Modifier.width(57.dp)
-                        )
-                        NumberField(
-                            label = "Rend",
-                            value = profile.rend,
-                            onValue = { v -> onChange(profile.copy(rend = v.coerceAtLeast(0))) },
-                            modifier = Modifier.width(57.dp)
-                        )
-                        NumberField(
-                            label = "Dmg",
-                            value = profile.damage,
-                            onValue = { v -> onChange(profile.copy(damage = v.coerceAtLeast(0))) },
-                            modifier = Modifier.width(57.dp)
-                        )
+                        TopLabeled("Wnd") {
+                            GateField2to6(
+                                label = null,
+                                value = profile.toWound,
+                                onValue = { v -> onChange(profile.copy(toWound = v)) },
+                                modifier = Modifier.width(57.dp).height(50.dp)
+                            )
+                        }
+                        TopLabeled("Rend") {
+                            NumberField(
+                                label = null,
+                                value = profile.rend,
+                                onValue = { v -> onChange(profile.copy(rend = v.coerceAtLeast(0))) },
+                                modifier = Modifier.width(57.dp).height(50.dp)
+                            )
+                        }
+                        TopLabeled("Dmg") {
+                            NumberField(
+                                label = null,
+                                value = profile.damage,
+                                onValue = { v -> onChange(profile.copy(damage = v.coerceAtLeast(0))) },
+                                modifier = Modifier.width(57.dp).height(50.dp)
+                            )
+                        }
                     }
                 }
             }
@@ -430,7 +451,7 @@ private fun ProfileEditor(
 // ---------- Champs numériques ----------
 @Composable
 private fun NumberField(
-    label: String,
+    label: String?,
     value: Int,
     onValue: (Int) -> Unit,
     modifier: Modifier = Modifier
@@ -441,7 +462,7 @@ private fun NumberField(
             val digits = txt.filter { ch -> ch.isDigit() }
             onValue(if (digits.isEmpty()) 0 else digits.toInt())
         },
-        label = { Text(label) },
+        label = if (label != null) ({ Text(label) }) else null,
         singleLine = true,
         keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
         modifier = modifier
@@ -450,7 +471,7 @@ private fun NumberField(
 
 @Composable
 private fun GateField2to6(
-    label: String,
+    label: String?,
     value: Int,
     onValue: (Int) -> Unit,
     modifier: Modifier = Modifier
@@ -464,8 +485,8 @@ private fun GateField2to6(
             val v = digits.toIntOrNull()
             if (v != null && v in 2..6) onValue(v)
         },
-        label = { Text(label) },
-        placeholder = { Text("2..6") },
+        label = if (label != null) ({ Text(label) }) else null,
+        placeholder = if (label == null) ({ Text("2..6") }) else null,
         singleLine = true,
         keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
         modifier = modifier
@@ -502,7 +523,7 @@ fun TargetTab(target: TargetConfig, onUpdate: (TargetConfig) -> Unit) {
                 placeholder = { Text("off or 2..6") },
                 keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
                 singleLine = true,
-                modifier = Modifier.width(100.dp)
+                modifier = Modifier.width(100.dp).height(50.dp)
             )
             Text(text = if (target.wardNeeded in 2..6) "${target.wardNeeded}+" else "off")
         }
@@ -526,7 +547,7 @@ fun TargetTab(target: TargetConfig, onUpdate: (TargetConfig) -> Unit) {
                 enabled = target.debuffHitEnabled,
                 keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
                 singleLine = true,
-                modifier = Modifier.width(80.dp)
+                modifier = Modifier.width(80.dp).height(50.dp)
             )
             if (target.debuffHitEnabled) Text("−${target.debuffHitValue} to Hit")
         }
