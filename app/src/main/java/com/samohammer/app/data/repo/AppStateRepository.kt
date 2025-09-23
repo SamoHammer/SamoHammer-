@@ -7,7 +7,8 @@ import com.samohammer.app.data.mapper.toProto
 import com.samohammer.app.model.*
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.map
-
+import kotlinx.coroutines.flow.first
+import androidx.datastore.core.DataStore.updateData
 /**
  * Repository central pour l'état de l'application (units, target, etc.)
  * - Fournit un Flow<AppStateDomain> pour l'UI
