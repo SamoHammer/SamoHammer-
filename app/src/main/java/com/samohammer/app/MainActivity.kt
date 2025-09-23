@@ -1,6 +1,6 @@
 // V1.2.10 — UI stable + moteur critique
 // Ajout : persistance Units + Target via AppStateViewModel (DataStore)
-// Patch : mappings Domain<->UI pour Units/Profiles
+// Patch : mappings Domain<->UI pour Units/Profiles (UI sans id -> id généré côté Domain)
 
 package com.samohammer.app
 
@@ -49,14 +49,9 @@ class MainActivity : ComponentActivity() {
                 // --- Lecture de l'état persistant ---
                 val persisted by appStateVM.state.collectAsState()
 
-                // 🔁 MAPPING DOMAIN -> UI (Units)
-                LaunchedEffect(persisted.units) {
-                    units = persisted.units.map { it.toUi() }
-                }
-                // 🔁 MAPPING DOMAIN -> UI (Target) (déjà OK)
-                LaunchedEffect(persisted.target) {
-                    target = persisted.target.toUi()
-                }
+                // Domain -> UI
+                LaunchedEffect(persisted.units) { units = persisted.units.map { it.toUi() } }
+                LaunchedEffect(persisted.target) { target = persisted.target.toUi() }
 
                 Scaffold(
                     topBar = {
@@ -75,7 +70,7 @@ class MainActivity : ComponentActivity() {
                             FloatingActionButton(onClick = {
                                 val newUnits = units + UnitEntry(name = "Unit ${units.size + 1}")
                                 units = newUnits
-                                // 🔁 MAPPING UI -> DOMAIN (Units)
+                                // UI -> Domain
                                 appStateVM.setUnits(newUnits.map { it.toDomain() })
                             }) { Text("+") }
                         }
@@ -87,7 +82,7 @@ class MainActivity : ComponentActivity() {
                                 units = units,
                                 onUpdateUnits = { newUnits ->
                                     units = newUnits
-                                    // 🔁 MAPPING UI -> DOMAIN (Units)
+                                    // UI -> Domain
                                     appStateVM.setUnits(newUnits.map { it.toDomain() })
                                 }
                             )
@@ -176,7 +171,7 @@ private fun expectedDamageForProfile(p: AttackProfile, target: TargetConfig, bas
     val pw = pWound(p.toWound)
     val pu = pUnsaved(baseSave, p.rend)
     val ward = wardFactor(target.wardNeeded)
-    val evNon6 = phNon6 * pw * pu * p.damage
+    val evNon6 = phNonSix * pw * pu * p.damage
     val mult6 = if (p.twoHits) 2.0 else 1.0
     val pw6 = if (p.mortal || p.autoW) 1.0 else pw
     val pu6 = if (p.mortal) 1.0 else pu
@@ -191,7 +186,7 @@ private fun expectedDamageAll(units: List<UnitEntry>, target: TargetConfig, base
     units.filter { it.active }.sumOf { expectedDamageForUnit(it, target, baseSave) }
 
 // -------------------------
-// Onglet Profils (identique UI)
+// Onglet Profils
 // -------------------------
 @Composable
 fun ProfilesTab(units: List<UnitEntry>, onUpdateUnits: (List<UnitEntry>) -> Unit) {
@@ -210,6 +205,7 @@ fun ProfilesTab(units: List<UnitEntry>, onUpdateUnits: (List<UnitEntry>) -> Unit
                         .padding(12.dp),
                     verticalArrangement = Arrangement.spacedBy(12.dp)
                 ) {
+                    // Ligne 1 : active + nom + chevron
                     Row(
                         verticalAlignment = Alignment.CenterVertically,
                         horizontalArrangement = Arrangement.spacedBy(12.dp),
@@ -238,6 +234,8 @@ fun ProfilesTab(units: List<UnitEntry>, onUpdateUnits: (List<UnitEntry>) -> Unit
                             Text(if (expanded) "▼" else "▶")
                         }
                     }
+
+                    // Ligne 2 : actions (Add Profile + Delete Unit)
                     Row(
                         modifier = Modifier.fillMaxWidth(),
                         horizontalArrangement = Arrangement.Start,
@@ -253,7 +251,9 @@ fun ProfilesTab(units: List<UnitEntry>, onUpdateUnits: (List<UnitEntry>) -> Unit
                                 )
                             }
                         ) { Text("Add Profile") }
+
                         Spacer(Modifier.width(12.dp))
+
                         TextButton(
                             onClick = {
                                 if (units.size > 1) {
@@ -262,6 +262,7 @@ fun ProfilesTab(units: List<UnitEntry>, onUpdateUnits: (List<UnitEntry>) -> Unit
                             }
                         ) { Text("Delete Unit") }
                     }
+
                     if (expanded) {
                         unit.profiles.forEachIndexed { pIndex, profile ->
                             ProfileEditor(
@@ -315,12 +316,14 @@ private fun ProfileEditor(
 ) {
     ElevatedCard(modifier = Modifier.fillMaxWidth()) {
         var expanded by rememberSaveable(profile.hashCode()) { mutableStateOf(true) }
+
         Column(
             modifier = Modifier
                 .fillMaxWidth()
                 .padding(12.dp),
             verticalArrangement = Arrangement.spacedBy(12.dp)
         ) {
+            // Header du profil
             Row(
                 verticalAlignment = Alignment.CenterVertically,
                 horizontalArrangement = Arrangement.spacedBy(12.dp),
@@ -343,24 +346,28 @@ private fun ProfileEditor(
                         onChange(profile.copy(attackType = next))
                     }
                 ) {
-                    Text(text = if (profile.attackType == AttackType.MELEE) "Melee" else "Shoot")
+                    Text(if (profile.attackType == AttackType.MELEE) "Melee" else "Shoot")
                 }
                 TextButton(onClick = { expanded = !expanded }) {
                     Text(if (expanded) "▼" else "▶")
                 }
             }
+
+            // Bouton suppression du profil
             Row(
                 modifier = Modifier.fillMaxWidth(),
                 horizontalArrangement = Arrangement.Start
             ) {
                 TextButton(onClick = onRemove) { Text("Delete Profile") }
             }
+
             if (expanded) {
                 Row(
                     modifier = Modifier.fillMaxWidth(),
                     horizontalArrangement = Arrangement.spacedBy(16.dp),
                     verticalAlignment = Alignment.Top
                 ) {
+                    // Champs numériques (gauche)
                     Column(verticalArrangement = Arrangement.spacedBy(10.dp), modifier = Modifier.weight(1f)) {
                         Row(horizontalArrangement = Arrangement.spacedBy(12.dp), modifier = Modifier.fillMaxWidth()) {
                             TopLabeled("Size") { NumberField(profile.models) { v -> onChange(profile.copy(models = v)) } }
@@ -373,6 +380,7 @@ private fun ProfileEditor(
                             TopLabeled("Dmg") { NumberField(profile.damage) { v -> onChange(profile.copy(damage = v)) } }
                         }
                     }
+                    // Cases à cocher (droite)
                     Column(verticalArrangement = Arrangement.spacedBy(8.dp), horizontalAlignment = Alignment.Start) {
                         LabeledCheckbox("2Hits", profile.twoHits) { onChange(profile.copy(twoHits = it)) }
                         LabeledCheckbox("AutoW", profile.autoW) { onChange(profile.copy(autoW = it)) }
@@ -384,6 +392,7 @@ private fun ProfileEditor(
     }
 }
 
+// ---------- Champs numériques ----------
 @Composable
 private fun NumberField(value: Int, onValue: (Int) -> Unit) {
     OutlinedTextField(
@@ -428,6 +437,8 @@ fun TargetTab(target: TargetConfig, onUpdate: (TargetConfig) -> Unit) {
         verticalArrangement = Arrangement.spacedBy(12.dp)
     ) {
         Text("Target buffs/debuffs", style = MaterialTheme.typography.titleMedium)
+
+        // Ward
         Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
             Text("Ward")
             var wardTxt by remember(target.wardNeeded) {
@@ -448,6 +459,8 @@ fun TargetTab(target: TargetConfig, onUpdate: (TargetConfig) -> Unit) {
             )
             Text(text = if (target.wardNeeded in 2..6) "${target.wardNeeded}+" else "off")
         }
+
+        // Debuff to hit
         Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
             Checkbox(
                 checked = target.debuffHitEnabled,
@@ -470,12 +483,13 @@ fun TargetTab(target: TargetConfig, onUpdate: (TargetConfig) -> Unit) {
             )
             if (target.debuffHitEnabled) Text("−${target.debuffHitValue} to Hit")
         }
+
         Divider()
     }
 }
 
 // -------------------------
-// Simulation Tab (identique UI)
+// Simulation Tab
 // -------------------------
 @Composable
 fun SimulationTab(units: List<UnitEntry>, target: TargetConfig) {
@@ -494,6 +508,7 @@ fun SimulationTab(units: List<UnitEntry>, target: TargetConfig) {
             return@Column
         }
 
+        // Header
         Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(12.dp)) {
             Text("Save", modifier = Modifier.width(70.dp))
             activeUnits.forEach { u -> Text(u.name, modifier = Modifier.weight(1f), maxLines = 1) }
@@ -534,6 +549,7 @@ private fun com.samohammer.app.model.TargetConfig.toUi(): TargetConfig =
 
 /* -------------------------
    Mapping Units/Profiles UI <-> Domain
+   (UI n’a pas d’id → on en génère un à l’aller)
    ------------------------- */
 private fun com.samohammer.app.model.AttackProfile.toUi(): AttackProfile =
     AttackProfile(
@@ -556,6 +572,7 @@ private fun com.samohammer.app.model.AttackProfile.toUi(): AttackProfile =
 
 private fun AttackProfile.toDomain(): com.samohammer.app.model.AttackProfile =
     com.samohammer.app.model.AttackProfile(
+        id = com.samohammer.app.util.newUuid(),  // id généré
         name = name,
         attackType = when (attackType) {
             AttackType.MELEE -> com.samohammer.app.model.AttackType.MELEE
@@ -582,6 +599,7 @@ private fun com.samohammer.app.model.UnitEntry.toUi(): UnitEntry =
 
 private fun UnitEntry.toDomain(): com.samohammer.app.model.UnitEntry =
     com.samohammer.app.model.UnitEntry(
+        id = com.samohammer.app.util.newUuid(), // id généré
         name = name,
         active = active,
         profiles = profiles.map { it.toDomain() }
