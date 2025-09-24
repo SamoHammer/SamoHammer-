@@ -1,7 +1,7 @@
-// V2.0.2 — UI tweak: colonne attributs figée + grille de coches compacte, scroll horizontal à droite
-// - Colonne gauche (attributs) largeur fixe, inchangée fonctionnellement
-// - Colonne droite (coches): cellules étroites, espacement réduit, checkbox compactes, horizontalScroll
-// - 7 cases UI-only (AoA, +1 Wound, +1 Dmg, +1 Rend + 2Hits/AutoW/Mortal), non persistées, non branchées moteur
+// V2.0.1 — UI: ajout d’une seule case "AoA" dans ProfileEditor (UI-only)
+// - "AoA" est un boolean dans le modèle UI AttackProfile (par défaut false)
+// - Non persisté, non branché au moteur (placeholder)
+// - Tout le reste identique à la baseline 2.0.0
 
 package com.samohammer.app
 
@@ -10,25 +10,23 @@ import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
 import androidx.activity.viewModels
 
-// Layout & Compose
-import androidx.compose.foundation.horizontalScroll
+// Compose
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.itemsIndexed
-import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.draw.scale
 import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.unit.dp
+
 import com.samohammer.app.ui.theme.SamoHammerTheme
 import kotlin.math.max
 
-// 🔗 Persistance (VM + Factory)
+// VM + Factory
 import com.samohammer.app.ui.AppStateViewModel
 import com.samohammer.app.ui.AppStateViewModelFactory
 
@@ -49,7 +47,7 @@ class MainActivity : ComponentActivity() {
                 var units by remember { mutableStateOf(listOf(UnitEntry(name = "Unit 1"))) }
                 var target by remember { mutableStateOf(TargetConfig()) }
 
-                // --- Lecture de l'état persistant ---
+                // lecture état persistant
                 val persisted by appStateVM.state.collectAsState()
                 LaunchedEffect(persisted.units) { units = persisted.units.map { it.toUi() } }
                 LaunchedEffect(persisted.target) { target = persisted.target.toUi() }
@@ -102,7 +100,7 @@ class MainActivity : ComponentActivity() {
 }
 
 // -------------------------
-// Modèles UI (avec 4 nouveaux booleans UI-only)
+// Modèles UI
 // -------------------------
 enum class AttackType { MELEE, SHOOT }
 
@@ -119,11 +117,8 @@ data class AttackProfile(
     val twoHits: Boolean = false,
     val autoW: Boolean = false,
     val mortal: Boolean = false,
-    // UI-only
-    val aoa: Boolean = false,
-    val plusOneWound: Boolean = false,
-    val plusOneDamage: Boolean = false,
-    val plusOneRend: Boolean = false
+    // NEW (UI-only, non persisté, non utilisé moteur pour l’instant)
+    val aoa: Boolean = false
 )
 
 data class UnitEntry(
@@ -139,7 +134,7 @@ data class TargetConfig(
 )
 
 // -------------------------
-// Moteur (identique)
+// Moteur
 // -------------------------
 private fun clamp2to6(x: Int) = x.coerceIn(2, 6)
 private fun pGate(needed: Int): Double = when {
@@ -166,7 +161,7 @@ private fun wardFactor(wardNeeded: Int): Double {
 }
 private fun expectedDamageForProfile(p: AttackProfile, target: TargetConfig, baseSave: Int?): Double {
     if (!p.active) return 0.0
-    val attacks = max(p.models, 0) * max(p.attacks, 0)
+    val attacks = kotlin.math.max(p.models, 0) * kotlin.math.max(p.attacks, 0)
     if (attacks == 0) return 0.0
     val debuff = if (target.debuffHitEnabled) target.debuffHitValue else 0
     val effHit = effectiveHitThreshold(p.toHit, debuff)
@@ -209,7 +204,7 @@ fun ProfilesTab(units: List<UnitEntry>, onUpdateUnits: (List<UnitEntry>) -> Unit
                         .padding(12.dp),
                     verticalArrangement = Arrangement.spacedBy(12.dp)
                 ) {
-                    // Ligne 1 : active + nom + chevron
+                    // Ligne 1
                     Row(
                         verticalAlignment = Alignment.CenterVertically,
                         horizontalArrangement = Arrangement.spacedBy(12.dp),
@@ -239,7 +234,7 @@ fun ProfilesTab(units: List<UnitEntry>, onUpdateUnits: (List<UnitEntry>) -> Unit
                         }
                     }
 
-                    // Ligne 2 : actions (Add Profile + Delete Unit)
+                    // Actions
                     Row(
                         modifier = Modifier.fillMaxWidth(),
                         horizontalArrangement = Arrangement.Start,
@@ -312,25 +307,6 @@ private fun LabeledCheckbox(text: String, checked: Boolean, onCheckedChange: (Bo
     }
 }
 
-// Helper: libellé au-dessus, case en dessous (compact possible)
-@Composable
-private fun TopLabeledCheckbox(
-    label: String,
-    checked: Boolean,
-    onCheckedChange: (Boolean) -> Unit,
-    modifier: Modifier = Modifier,
-    compact: Boolean = true
-) {
-    Column(
-        horizontalAlignment = Alignment.CenterHorizontally,
-        modifier = modifier
-    ) {
-        Text(label, style = MaterialTheme.typography.labelSmall, maxLines = 1)
-        val cbMod = if (compact) Modifier.scale(0.9f) else Modifier
-        Checkbox(checked = checked, onCheckedChange = onCheckedChange, modifier = cbMod)
-    }
-}
-
 @Composable
 private fun ProfileEditor(
     profile: AttackProfile,
@@ -339,7 +315,6 @@ private fun ProfileEditor(
 ) {
     ElevatedCard(modifier = Modifier.fillMaxWidth()) {
         var expanded by rememberSaveable(profile.hashCode()) { mutableStateOf(true) }
-
         Column(
             modifier = Modifier
                 .fillMaxWidth()
@@ -376,7 +351,7 @@ private fun ProfileEditor(
                 }
             }
 
-            // Bouton suppression du profil
+            // Bouton suppression
             Row(
                 modifier = Modifier.fillMaxWidth(),
                 horizontalArrangement = Arrangement.Start
@@ -390,12 +365,8 @@ private fun ProfileEditor(
                     horizontalArrangement = Arrangement.spacedBy(16.dp),
                     verticalAlignment = Alignment.Top
                 ) {
-                    // ⬅️ Colonne gauche FIXE (attributs)
-                    val leftWidth = 230.dp
-                    Column(
-                        verticalArrangement = Arrangement.spacedBy(10.dp),
-                        modifier = Modifier.width(leftWidth)
-                    ) {
+                    // Gauche : attributs
+                    Column(verticalArrangement = Arrangement.spacedBy(10.dp), modifier = Modifier.weight(1f)) {
                         Row(horizontalArrangement = Arrangement.spacedBy(12.dp), modifier = Modifier.fillMaxWidth()) {
                             TopLabeled("Size") { NumberField(profile.models) { v -> onChange(profile.copy(models = v)) } }
                             TopLabeled("Atk")  { NumberField(profile.attacks) { v -> onChange(profile.copy(attacks = v)) } }
@@ -407,35 +378,13 @@ private fun ProfileEditor(
                             TopLabeled("Dmg")  { NumberField(profile.damage) { v -> onChange(profile.copy(damage = v)) } }
                         }
                     }
-
-                    // ➡️ Colonne droite SCROLLABLE (coches compactes, espacement serré)
-                    val cellW = 72.dp
-                    val hSpace = 8.dp
-                    Column(
-                        verticalArrangement = Arrangement.spacedBy(6.dp),
-                        horizontalAlignment = Alignment.Start,
-                        modifier = Modifier
-                            .weight(1f)
-                            .horizontalScroll(rememberScrollState())
-                    ) {
-                        // Deux rangées dans un Row scrollable pour gagner de la place
-                        Row(
-                            horizontalArrangement = Arrangement.spacedBy(hSpace),
-                            verticalAlignment = Alignment.Top
-                        ) {
-                            // Rangée 1 (4 cases)
-                            TopLabeledCheckbox("2Hits",  profile.twoHits,  { onChange(profile.copy(twoHits = it)) },  Modifier.width(cellW))
-                            TopLabeledCheckbox("AutoW",  profile.autoW,    { onChange(profile.copy(autoW = it)) },    Modifier.width(cellW))
-                            TopLabeledCheckbox("Mortal", profile.mortal,   { onChange(profile.copy(mortal = it)) },   Modifier.width(cellW))
-                            TopLabeledCheckbox("AoA",    profile.aoa,      { onChange(profile.copy(aoa = it)) },      Modifier.width(cellW))
-
-                            Spacer(Modifier.width(12.dp)) // petite respiration entre rangées
-
-                            // Rangée 2 (3 cases)
-                            TopLabeledCheckbox("+1 Wound", profile.plusOneWound, { onChange(profile.copy(plusOneWound = it)) }, Modifier.width(76.dp))
-                            TopLabeledCheckbox("+1 Dmg",   profile.plusOneDamage,{ onChange(profile.copy(plusOneDamage = it)) }, Modifier.width(76.dp))
-                            TopLabeledCheckbox("+1 Rend",  profile.plusOneRend,  { onChange(profile.copy(plusOneRend = it)) },  Modifier.width(76.dp))
-                        }
+                    // Droite : 3 cases + AoA (4ème) — simple ajout sous les trois existantes
+                    Column(verticalArrangement = Arrangement.spacedBy(8.dp), horizontalAlignment = Alignment.Start) {
+                        LabeledCheckbox("2Hits", profile.twoHits) { onChange(profile.copy(twoHits = it)) }
+                        LabeledCheckbox("AutoW", profile.autoW) { onChange(profile.copy(autoW = it)) }
+                        LabeledCheckbox("Mortal", profile.mortal) { onChange(profile.copy(mortal = it)) }
+                        Divider(thickness = 0.5.dp)
+                        LabeledCheckbox("AoA", profile.aoa) { onChange(profile.copy(aoa = it)) }
                     }
                 }
             }
@@ -489,6 +438,7 @@ fun TargetTab(target: TargetConfig, onUpdate: (TargetConfig) -> Unit) {
     ) {
         Text("Target buffs/debuffs", style = MaterialTheme.typography.titleMedium)
 
+        // Ward
         Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
             Text("Ward")
             var wardTxt by remember(target.wardNeeded) {
@@ -510,6 +460,7 @@ fun TargetTab(target: TargetConfig, onUpdate: (TargetConfig) -> Unit) {
             Text(text = if (target.wardNeeded in 2..6) "${target.wardNeeded}+" else "off")
         }
 
+        // Debuff to hit
         Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
             Checkbox(
                 checked = target.debuffHitEnabled,
@@ -557,6 +508,7 @@ fun SimulationTab(units: List<UnitEntry>, target: TargetConfig) {
             return@Column
         }
 
+        // Header
         Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(12.dp)) {
             Text("Save", modifier = Modifier.width(70.dp))
             activeUnits.forEach { u -> Text(u.name, modifier = Modifier.weight(1f), maxLines = 1) }
@@ -616,6 +568,7 @@ private fun com.samohammer.app.model.AttackProfile.toUi(): AttackProfile =
         twoHits = twoHits,
         autoW = autoW,
         mortal = mortal
+        // aoa est UI-only → default false côté UI
     )
 
 private fun AttackProfile.toDomain(): com.samohammer.app.model.AttackProfile =
@@ -636,6 +589,7 @@ private fun AttackProfile.toDomain(): com.samohammer.app.model.AttackProfile =
         twoHits = twoHits,
         autoW = autoW,
         mortal = mortal
+        // aoa non mappé (UI-only)
     )
 
 private fun com.samohammer.app.model.UnitEntry.toUi(): UnitEntry =
