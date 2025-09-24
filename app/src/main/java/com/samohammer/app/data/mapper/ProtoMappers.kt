@@ -20,7 +20,7 @@ import com.samohammer.app.util.newUuid
 private fun AttackTypeProto.toDomain(): AttackType = when (this) {
     AttackTypeProto.MELEE -> AttackType.MELEE
     AttackTypeProto.SHOOT -> AttackType.SHOOT
-    else -> AttackType.MELEE // exhaustif (gère le cas inconnu)
+    else -> AttackType.MELEE
 }
 
 private fun AttackType.toProto(): AttackTypeProto = when (this) {
@@ -45,7 +45,8 @@ private fun AttackProfileProto.toDomain(): AttackProfile =
         active = this.active,
         twoHits = this.twoHits,
         autoW = this.autoW,
-        mortal = this.mortal
+        mortal = this.mortal,
+        aoa = if (this.hasAoa()) this.aoa else false // NEW: compat ancienne version
     )
 
 private fun AttackProfile.toProto(): AttackProfileProto =
@@ -63,6 +64,7 @@ private fun AttackProfile.toProto(): AttackProfileProto =
         .setTwoHits(twoHits)
         .setAutoW(autoW)
         .setMortal(mortal)
+        .setAoa(aoa) // NEW
         .build()
 
 // -----------------------
