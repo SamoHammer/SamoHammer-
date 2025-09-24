@@ -10,8 +10,7 @@ import com.samohammer.app.util.newUuid
 
 /**
  * Mappers Proto ↔ Domain.
- * - Tolérants si des IDs sont absents (créent un UUID).
- * - Enum mapping explicite.
+ * Version 2.1.0 — add AoA (proto3 bool, no presence).
  */
 
 // -----------------------
@@ -46,7 +45,8 @@ private fun AttackProfileProto.toDomain(): AttackProfile =
         twoHits = this.twoHits,
         autoW = this.autoW,
         mortal = this.mortal,
-        aoa = if (this.hasAoa()) this.aoa else false // NEW: compat ancienne version
+        // proto3: pas de hasAoa(); false par défaut si absent
+        aoa = this.aoa
     )
 
 private fun AttackProfile.toProto(): AttackProfileProto =
@@ -64,7 +64,7 @@ private fun AttackProfile.toProto(): AttackProfileProto =
         .setTwoHits(twoHits)
         .setAutoW(autoW)
         .setMortal(mortal)
-        .setAoa(aoa) // NEW
+        .setAoa(aoa)
         .build()
 
 // -----------------------
@@ -101,21 +101,4 @@ private fun TargetConfig.toProto(): TargetConfigProto =
         .setWardNeeded(wardNeeded)
         .setDebuffHitEnabled(debuffHitEnabled)
         .setDebuffHitValue(debuffHitValue)
-        .build()
-
-// -----------------------
-// AppState
-// -----------------------
-fun AppStateProto.toDomain(): AppStateDomain =
-    AppStateDomain(
-        units = this.unitsList.map { it.toDomain() },
-        target = if (this.hasTarget()) this.target.toDomain() else TargetConfig(),
-        schemaVersion = if (this.schemaVersion == 0) 1 else this.schemaVersion
-    )
-
-fun AppStateDomain.toProto(): AppStateProto =
-    AppStateProto.newBuilder()
-        .addAllUnits(units.map { it.toProto() })
-        .setTarget(target.toProto())
-        .setSchemaVersion(if (schemaVersion <= 0) 1 else schemaVersion)
         .build()
