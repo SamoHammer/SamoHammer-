@@ -10,7 +10,7 @@ import com.samohammer.app.util.newUuid
 
 /**
  * Mappers Proto ↔ Domain.
- * Version 2.1.0 — add AoA (proto3 bool, no presence).
+ * Version 2.1.0 — inclut AoA (proto3 bool, sans hasAoa()).
  */
 
 // -----------------------
@@ -28,7 +28,7 @@ private fun AttackType.toProto(): AttackTypeProto = when (this) {
 }
 
 // -----------------------
-// Profiles
+// AttackProfile
 // -----------------------
 private fun AttackProfileProto.toDomain(): AttackProfile =
     AttackProfile(
@@ -45,8 +45,7 @@ private fun AttackProfileProto.toDomain(): AttackProfile =
         twoHits = this.twoHits,
         autoW = this.autoW,
         mortal = this.mortal,
-        // proto3: pas de hasAoa(); false par défaut si absent
-        aoa = this.aoa
+        aoa = this.aoa // ✅ proto3 : false par défaut si absent
     )
 
 private fun AttackProfile.toProto(): AttackProfileProto =
@@ -68,7 +67,7 @@ private fun AttackProfile.toProto(): AttackProfileProto =
         .build()
 
 // -----------------------
-// Units
+// UnitEntry
 // -----------------------
 private fun UnitEntryProto.toDomain(): UnitEntry =
     UnitEntry(
@@ -87,7 +86,7 @@ private fun UnitEntry.toProto(): UnitEntryProto =
         .build()
 
 // -----------------------
-// Target
+// TargetConfig
 // -----------------------
 private fun TargetConfigProto.toDomain(): TargetConfig =
     TargetConfig(
@@ -101,4 +100,21 @@ private fun TargetConfig.toProto(): TargetConfigProto =
         .setWardNeeded(wardNeeded)
         .setDebuffHitEnabled(debuffHitEnabled)
         .setDebuffHitValue(debuffHitValue)
+        .build()
+
+// -----------------------
+// AppState
+// -----------------------
+fun AppStateProto.toDomain(): AppStateDomain =
+    AppStateDomain(
+        units = this.unitsList.map { it.toDomain() },
+        target = if (this.hasTarget()) this.target.toDomain() else TargetConfig(),
+        schemaVersion = if (this.schemaVersion == 0) 1 else this.schemaVersion
+    )
+
+fun AppStateDomain.toProto(): AppStateProto =
+    AppStateProto.newBuilder()
+        .addAllUnits(units.map { it.toProto() })
+        .setTarget(target.toProto())
+        .setSchemaVersion(if (schemaVersion <= 0) 1 else schemaVersion)
         .build()
