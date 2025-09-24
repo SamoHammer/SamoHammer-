@@ -1,6 +1,6 @@
-// V2.0.2 — UI: cases à droite en grille 2×2 avec label au-dessus (petite police)
-// - 4 cases: 2Hits, AutoW, Mortal, AoA (UI-only, non persistées, non branchées moteur)
-// - Colonne gauche (attributs) inchangée, moteur/persistance identiques
+// V2.0.3 — UI build fix
+// - TopLabeledCheckbox: onCheckedChange avant modifier + appels nommés
+// - TargetTab: corrections "2..6" (plage inclusive) partout
 
 package com.samohammer.app
 
@@ -307,10 +307,12 @@ private fun TopLabeledCheckbox(
     modifier: Modifier = Modifier
 ) {
     Column(horizontalAlignment = Alignment.CenterHorizontally, modifier = modifier) {
-        // petite police pour le label
         Text(label, style = MaterialTheme.typography.labelSmall, maxLines = 1)
-        // case légèrement compacte pour gagner de la place
-        Checkbox(checked = checked, onCheckedChange = onCheckedChange, modifier = Modifier.scale(0.9f))
+        Checkbox(
+            checked = checked,
+            onCheckedChange = onCheckedChange,
+            modifier = Modifier.scale(0.9f)
+        )
     }
 }
 
@@ -351,7 +353,7 @@ private fun ProfileEditor(
                         onChange(profile.copy(attackType = next))
                     }
                 ) {
-                    Text(text = if (profile.attackType == AttackType.MELEE) "Melee" else "Shoot")
+                    Text(if (profile.attackType == AttackType.MELEE) "Melee" else "Shoot")
                 }
                 TextButton(onClick = { expanded = !expanded }) {
                     Text(if (expanded) "▼" else "▶")
@@ -372,7 +374,7 @@ private fun ProfileEditor(
                     horizontalArrangement = Arrangement.spacedBy(16.dp),
                     verticalAlignment = Alignment.Top
                 ) {
-                    // Gauche : attributs (50%)
+                    // Gauche : attributs
                     Column(
                         verticalArrangement = Arrangement.spacedBy(10.dp),
                         modifier = Modifier.weight(1f)
@@ -389,7 +391,7 @@ private fun ProfileEditor(
                         }
                     }
 
-                    // Droite : grille 2×2, labels au-dessus, petite police
+                    // Droite : grille 2×2, labels au-dessus
                     Column(
                         verticalArrangement = Arrangement.spacedBy(12.dp),
                         modifier = Modifier.weight(1f)
@@ -398,15 +400,31 @@ private fun ProfileEditor(
                             modifier = Modifier.fillMaxWidth(),
                             horizontalArrangement = Arrangement.SpaceEvenly
                         ) {
-                            TopLabeledCheckbox("2Hits", profile.twoHits) { onChange(profile.copy(twoHits = it)) }
-                            TopLabeledCheckbox("AutoW", profile.autoW) { onChange(profile.copy(autoW = it)) }
+                            TopLabeledCheckbox(
+                                label = "2Hits",
+                                checked = profile.twoHits,
+                                onCheckedChange = { onChange(profile.copy(twoHits = it)) }
+                            )
+                            TopLabeledCheckbox(
+                                label = "AutoW",
+                                checked = profile.autoW,
+                                onCheckedChange = { onChange(profile.copy(autoW = it)) }
+                            )
                         }
                         Row(
                             modifier = Modifier.fillMaxWidth(),
                             horizontalArrangement = Arrangement.SpaceEvenly
                         ) {
-                            TopLabeledCheckbox("Mortal", profile.mortal) { onChange(profile.copy(mortal = it)) }
-                            TopLabeledCheckbox("AoA", profile.aoa) { onChange(profile.copy(aoa = it)) }
+                            TopLabeledCheckbox(
+                                label = "Mortal",
+                                checked = profile.mortal,
+                                onCheckedChange = { onChange(profile.copy(mortal = it)) }
+                            )
+                            TopLabeledCheckbox(
+                                label = "AoA",
+                                checked = profile.aoa,
+                                onCheckedChange = { onChange(profile.copy(aoa = it)) }
+                            )
                         }
                     }
                 }
@@ -531,7 +549,6 @@ fun SimulationTab(units: List<UnitEntry>, target: TargetConfig) {
             return@Column
         }
 
-        // Header
         Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(12.dp)) {
             Text("Save", modifier = Modifier.width(70.dp))
             activeUnits.forEach { u -> Text(u.name, modifier = Modifier.weight(1f), maxLines = 1) }
@@ -572,7 +589,6 @@ private fun com.samohammer.app.model.TargetConfig.toUi(): TargetConfig =
 
 /* -------------------------
    Mapping Units/Profiles UI <-> Domain
-   (UI n’a pas d’id → on en génère un à l’aller)
    ------------------------- */
 private fun com.samohammer.app.model.AttackProfile.toUi(): AttackProfile =
     AttackProfile(
@@ -591,7 +607,7 @@ private fun com.samohammer.app.model.AttackProfile.toUi(): AttackProfile =
         twoHits = twoHits,
         autoW = autoW,
         mortal = mortal,
-        aoa = false // UI-only par défaut
+        aoa = false
     )
 
 private fun AttackProfile.toDomain(): com.samohammer.app.model.AttackProfile =
@@ -612,7 +628,6 @@ private fun AttackProfile.toDomain(): com.samohammer.app.model.AttackProfile =
         twoHits = twoHits,
         autoW = autoW,
         mortal = mortal
-        // aoa non mappé (UI-only)
     )
 
 private fun com.samohammer.app.model.UnitEntry.toUi(): UnitEntry =
