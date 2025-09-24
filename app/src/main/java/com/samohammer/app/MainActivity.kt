@@ -1,7 +1,8 @@
-// V2.0.3+fix3 — UI: colonne des cases ANCRÉE à droite
-// - Row -> Arrangement.SpaceBetween : la colonne cases est poussée au bord droit
-// - Colonne gauche weight(1f), colonne droite width(110.dp)
-// - Le reste est inchangé
+// V2.0.3+fix4 — UI: colonne cases ancrée à droite + appels nommés pour onCheckedChange
+// - Row centrale en Arrangement.SpaceBetween (colonne droite collée au bord)
+// - Colonne droite width(110.dp)
+// - Appels TopLabeledCheckbox(...) avec onCheckedChange = { checked -> ... } (plus de lambda positionnelle)
+// - Moteur/persistance/mappings inchangés
 
 package com.samohammer.app
 
@@ -269,7 +270,11 @@ private fun TopLabeledCheckbox(
 ) {
     Column(horizontalAlignment = Alignment.CenterHorizontally, modifier = modifier) {
         Text(label, style = MaterialTheme.typography.labelSmall, maxLines = 1)
-        Checkbox(checked = checked, onCheckedChange = onCheckedChange, modifier = Modifier.scale(0.9f))
+        Checkbox(
+            checked = checked,
+            onCheckedChange = onCheckedChange,
+            modifier = Modifier.scale(0.9f)
+        )
     }
 }
 
@@ -310,13 +315,13 @@ private fun ProfileEditor(
             }
 
             if (expanded) {
-                // >>>> ICI : SpaceBetween pousse la colonne de droite au bord
+                // SpaceBetween : pousse la colonne de droite au bord
                 Row(
                     modifier = Modifier.fillMaxWidth(),
                     horizontalArrangement = Arrangement.SpaceBetween,
                     verticalAlignment = Alignment.Top
                 ) {
-                    // Colonne GAUCHE : champs (prend tout l'espace possible)
+                    // Colonne gauche : champs
                     Column(
                         verticalArrangement = Arrangement.spacedBy(10.dp),
                         modifier = Modifier.weight(1f)
@@ -333,19 +338,35 @@ private fun ProfileEditor(
                         }
                     }
 
-                    // Colonne DROITE : checkboxes (collée à droite)
+                    // Colonne droite : checkboxes, collée à droite (width fixe)
                     Column(
                         verticalArrangement = Arrangement.spacedBy(12.dp),
                         horizontalAlignment = Alignment.End,
                         modifier = Modifier.width(110.dp)
                     ) {
                         Row(horizontalArrangement = Arrangement.spacedBy(8.dp), modifier = Modifier.fillMaxWidth()) {
-                            TopLabeledCheckbox("2Hits", profile.twoHits) { onChange(profile.copy(twoHits = it)) }
-                            TopLabeledCheckbox("AutoW", profile.autoW) { onChange(profile.copy(autoW = it)) }
+                            TopLabeledCheckbox(
+                                label = "2Hits",
+                                checked = profile.twoHits,
+                                onCheckedChange = { checked -> onChange(profile.copy(twoHits = checked)) }
+                            )
+                            TopLabeledCheckbox(
+                                label = "AutoW",
+                                checked = profile.autoW,
+                                onCheckedChange = { checked -> onChange(profile.copy(autoW = checked)) }
+                            )
                         }
                         Row(horizontalArrangement = Arrangement.spacedBy(8.dp), modifier = Modifier.fillMaxWidth()) {
-                            TopLabeledCheckbox("Mortal", profile.mortal) { onChange(profile.copy(mortal = it)) }
-                            TopLabeledCheckbox("AoA", profile.aoa) { onChange(profile.copy(aoa = it)) }
+                            TopLabeledCheckbox(
+                                label = "Mortal",
+                                checked = profile.mortal,
+                                onCheckedChange = { checked -> onChange(profile.copy(mortal = checked)) }
+                            )
+                            TopLabeledCheckbox(
+                                label = "AoA",
+                                checked = profile.aoa,
+                                onCheckedChange = { checked -> onChange(profile.copy(aoa = checked)) }
+                            )
                         }
                     }
                 }
