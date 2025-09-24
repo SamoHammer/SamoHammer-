@@ -20,6 +20,7 @@ import androidx.compose.runtime.*
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.scale
 import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.unit.dp
 
@@ -314,20 +315,22 @@ private fun LabeledCheckbox(text: String, checked: Boolean, onCheckedChange: (Bo
     }
 }
 
-// Nouveau helper : libellé au-dessus, case en dessous (centrée)
+// Nouveau helper : libellé au-dessus, case en dessous (centrée), compact possible
 @Composable
 private fun TopLabeledCheckbox(
     label: String,
     checked: Boolean,
     onCheckedChange: (Boolean) -> Unit,
-    modifier: Modifier = Modifier
+    modifier: Modifier = Modifier,
+    compact: Boolean = true
 ) {
     Column(
         horizontalAlignment = Alignment.CenterHorizontally,
         modifier = modifier
     ) {
-        Text(label, style = MaterialTheme.typography.labelSmall)
-        Checkbox(checked = checked, onCheckedChange = onCheckedChange)
+        Text(label, style = MaterialTheme.typography.labelSmall, maxLines = 1)
+        val cbMod = if (compact) Modifier.scale(0.9f) else Modifier
+        Checkbox(checked = checked, onCheckedChange = onCheckedChange, modifier = cbMod)
     }
 }
 
@@ -390,7 +393,7 @@ private fun ProfileEditor(
                     horizontalArrangement = Arrangement.spacedBy(16.dp),
                     verticalAlignment = Alignment.Top
                 ) {
-                    // Colonne gauche : 2 lignes de 3 champs (labels au-dessus, ~50dp)
+                    // Colonne gauche : 2 lignes de 3 champs (labels au-dessus)
                     Column(verticalArrangement = Arrangement.spacedBy(10.dp), modifier = Modifier.weight(1f)) {
                         Row(horizontalArrangement = Arrangement.spacedBy(12.dp), modifier = Modifier.fillMaxWidth()) {
                             TopLabeled("Size") { NumberField(profile.models) { v -> onChange(profile.copy(models = v)) } }
@@ -404,29 +407,33 @@ private fun ProfileEditor(
                         }
                     }
 
-                    // Colonne droite : grille 4 + 3 (libellé au-dessus de chaque checkbox)
+                    // Colonne droite : grille 4x2 (largeur fixe par cellule), libellé au-dessus
                     Column(
                         verticalArrangement = Arrangement.spacedBy(8.dp),
                         horizontalAlignment = Alignment.Start
                     ) {
+                        val cellW = 92.dp
                         // Rangée 1 : 4 cases
                         Row(
+                            modifier = Modifier.fillMaxWidth(),
                             horizontalArrangement = Arrangement.spacedBy(12.dp),
                             verticalAlignment = Alignment.Top
                         ) {
-                            TopLabeledCheckbox("2Hits", profile.twoHits, { onChange(profile.copy(twoHits = it)) }, Modifier.width(80.dp))
-                            TopLabeledCheckbox("AutoW", profile.autoW, { onChange(profile.copy(autoW = it)) }, Modifier.width(80.dp))
-                            TopLabeledCheckbox("Mortal", profile.mortal, { onChange(profile.copy(mortal = it)) }, Modifier.width(80.dp))
-                            TopLabeledCheckbox("AoA", profile.aoa, { onChange(profile.copy(aoa = it)) }, Modifier.width(80.dp))
+                            TopLabeledCheckbox("2Hits",  profile.twoHits,  { onChange(profile.copy(twoHits = it)) },  Modifier.width(cellW))
+                            TopLabeledCheckbox("AutoW",  profile.autoW,    { onChange(profile.copy(autoW = it)) },    Modifier.width(cellW))
+                            TopLabeledCheckbox("Mortal", profile.mortal,   { onChange(profile.copy(mortal = it)) },   Modifier.width(cellW))
+                            TopLabeledCheckbox("AoA",    profile.aoa,      { onChange(profile.copy(aoa = it)) },      Modifier.width(cellW))
                         }
-                        // Rangée 2 : 3 cases
+                        // Rangée 2 : 3 cases + 1 spacer pour garder l'alignement
                         Row(
+                            modifier = Modifier.fillMaxWidth(),
                             horizontalArrangement = Arrangement.spacedBy(12.dp),
                             verticalAlignment = Alignment.Top
                         ) {
-                            TopLabeledCheckbox("+1 Wound", profile.plusOneWound, { onChange(profile.copy(plusOneWound = it)) }, Modifier.width(90.dp))
-                            TopLabeledCheckbox("+1 Dmg", profile.plusOneDamage, { onChange(profile.copy(plusOneDamage = it)) }, Modifier.width(90.dp))
-                            TopLabeledCheckbox("+1 Rend", profile.plusOneRend, { onChange(profile.copy(plusOneRend = it)) }, Modifier.width(90.dp))
+                            TopLabeledCheckbox("+1 Wound", profile.plusOneWound, { onChange(profile.copy(plusOneWound = it)) }, Modifier.width(cellW))
+                            TopLabeledCheckbox("+1 Dmg",   profile.plusOneDamage,{ onChange(profile.copy(plusOneDamage = it)) }, Modifier.width(cellW))
+                            TopLabeledCheckbox("+1 Rend",  profile.plusOneRend,  { onChange(profile.copy(plusOneRend = it)) },  Modifier.width(cellW))
+                            Spacer(Modifier.width(cellW))
                         }
                     }
                 }
