@@ -1,18 +1,21 @@
 syntax = "proto3";
 
-package com.samohammer.app.proto;
-
 option java_multiple_files = true;
 option java_package = "com.samohammer.app.proto";
 
-// --- Enums ---
-enum AttackType {
-  MELEE = 0;
-  SHOOT = 1;
+// État global
+message AppState {
+  repeated UnitEntry units = 1;
+  TargetConfig target = 2;
+  int32 schema_version = 3;
 }
 
-// --- Messages de domaine ---
-// Reflètent nos modèles, avec IDs stables (String)
+message UnitEntry {
+  string id = 1;
+  string name = 2;
+  bool active = 3;
+  repeated AttackProfile profiles = 4;
+}
 
 message AttackProfile {
   string id = 1;
@@ -28,29 +31,20 @@ message AttackProfile {
 
   bool active = 10;
 
-  // Flags critiques (déclenchés sur 6 naturel pour toucher)
+  // Flags critiques (déclenchés sur 6 naturel)
   bool two_hits = 11; // 2Hits
   bool auto_w = 12;   // AutoW
   bool mortal = 13;   // Mortal
-}
-
-message UnitEntry {
-  string id = 1;
-  string name = 2;
-  bool active = 3;
-  repeated AttackProfile profiles = 4;
+  bool aoa = 14;      // All-out Attack (+1 to Hit, min 2+)
 }
 
 message TargetConfig {
-  int32 ward_needed = 1;        // 0 = off, sinon 2..6
+  int32 ward_needed = 1;
   bool debuff_hit_enabled = 2;
-  int32 debuff_hit_value = 3;   // 0..3
+  int32 debuff_hit_value = 3;
 }
 
-message AppState {
-  repeated UnitEntry units = 1;
-  TargetConfig target = 2;
-
-  // Pour gérer les migrations futures (par défaut 0; on fixera en Serializer)
-  int32 schema_version = 100;
+enum AttackType {
+  MELEE = 0;
+  SHOOT = 1;
 }
