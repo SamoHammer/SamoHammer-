@@ -1,8 +1,5 @@
-// V2.0.3+fix4 — UI: colonne cases ancrée à droite + appels nommés pour onCheckedChange
-// - Row centrale en Arrangement.SpaceBetween (colonne droite collée au bord)
-// - Colonne droite width(110.dp)
-// - Appels TopLabeledCheckbox(...) avec onCheckedChange = { checked -> ... } (plus de lambda positionnelle)
-// - Moteur/persistance/mappings inchangés
+// V2.1.0 — AoA persisté + moteur: AoA donne +1 pour toucher (min 2+). UI inchangée.
+// Base: V2.0.3+fix4 (colonne cases ancrée à droite, appels nommés sur onCheckedChange)
 
 package com.samohammer.app
 
@@ -86,7 +83,7 @@ class MainActivity : ComponentActivity() {
     }
 }
 
-// ===== UI models =====
+// ===== UI models (UI inchangée) =====
 enum class AttackType { MELEE, SHOOT }
 
 data class AttackProfile(
@@ -102,7 +99,7 @@ data class AttackProfile(
     val twoHits: Boolean = false,
     val autoW: Boolean = false,
     val mortal: Boolean = false,
-    val aoa: Boolean = false, // UI-only
+    val aoa: Boolean = false // persisté via mapping
 )
 
 data class UnitEntry(
@@ -117,15 +114,20 @@ data class TargetConfig(
     val debuffHitValue: Int = 1
 )
 
-// ===== Engine =====
+// ===== Engine (prise en compte de AoA) =====
 private fun clamp2to6(x: Int) = x.coerceIn(2, 6)
 private fun pGate(needed: Int): Double = when {
     needed <= 1 -> 1.0
     needed >= 7 -> 0.0
     else -> (7 - needed) / 6.0
 }
-private fun effectiveHitThreshold(baseNeeded: Int, debuff: Int): Int =
-    clamp2to6(baseNeeded + debuff)
+
+// AoA = +1 to Hit -> seuil -1, borné [2..6]
+private fun effectiveHitThreshold(baseNeeded: Int, debuff: Int, aoa: Boolean): Int {
+    val buff = if (aoa) -1 else 0
+    return clamp2to6(baseNeeded + debuff + buff)
+}
+
 private fun pHitNonSix(effNeeded: Int): Double {
     val successes = (6 - effNeeded).coerceAtLeast(0)
     return successes / 6.0
@@ -145,13 +147,16 @@ private fun expectedDamageForProfile(p: AttackProfile, target: TargetConfig, bas
     if (!p.active) return 0.0
     val attacks = max(p.models, 0) * max(p.attacks, 0)
     if (attacks == 0) return 0.0
+
     val debuff = if (target.debuffHitEnabled) target.debuffHitValue else 0
-    val effHit = effectiveHitThreshold(p.toHit, debuff)
+    val effHit = effectiveHitThreshold(p.toHit, debuff, p.aoa) // <<< AoA appliqué
+
     val p6 = 1.0 / 6.0
     val phNon6 = pHitNonSix(effHit)
     val pw = pWound(p.toWound)
     val pu = pUnsaved(baseSave, p.rend)
     val ward = wardFactor(target.wardNeeded)
+
     val evNon6 = phNon6 * pw * pu * p.damage
     val mult6 = if (p.twoHits) 2.0 else 1.0
     val pw6 = if (p.mortal || p.autoW) 1.0 else pw
@@ -166,7 +171,7 @@ private fun expectedDamageForUnit(u: UnitEntry, target: TargetConfig, baseSave: 
 private fun expectedDamageAll(units: List<UnitEntry>, target: TargetConfig, baseSave: Int?): Double =
     units.filter { it.active }.sumOf { expectedDamageForUnit(it, target, baseSave) }
 
-// ===== Profiles tab =====
+// ===== Onglet Profils (inchangé) =====
 @Composable
 fun ProfilesTab(units: List<UnitEntry>, onUpdateUnits: (List<UnitEntry>) -> Unit) {
     LazyColumn(
@@ -215,12 +220,16 @@ fun ProfilesTab(units: List<UnitEntry>, onUpdateUnits: (List<UnitEntry>) -> Unit
                         verticalAlignment = Alignment.CenterVertically
                     ) {
                         TextButton(onClick = {
-                            onUpdateUnits(units.toMutableList().also { list ->
-                                val newProfiles = unit.profiles + AttackProfile(name = "Weapon Profile")
-                                list[unitIndex] = unit.copy(profiles = newProfiles)
-                            })
+                            onUpdateUnits(
+                                units.toMutableList().also { list ->
+                                    val newProfiles = unit.profiles + AttackProfile(name = "Weapon Profile")
+                                    list[unitIndex] = unit.copy(profiles = newProfiles)
+                                }
+                            )
                         }) { Text("Add Profile") }
+
                         Spacer(Modifier.width(12.dp))
+
                         TextButton(onClick = {
                             if (units.size > 1) {
                                 onUpdateUnits(units.toMutableList().also { it.removeAt(unitIndex) })
@@ -234,13 +243,17 @@ fun ProfilesTab(units: List<UnitEntry>, onUpdateUnits: (List<UnitEntry>) -> Unit
                                 profile = profile,
                                 onChange = { updated ->
                                     onUpdateUnits(units.toMutableList().also { list ->
-                                        val newProfiles = unit.profiles.toMutableList().also { it[pIndex] = updated }
+                                        val newProfiles = unit.profiles.toMutableList().also {
+                                            it[pIndex] = updated
+                                        }
                                         list[unitIndex] = unit.copy(profiles = newProfiles)
                                     })
                                 },
                                 onRemove = {
                                     onUpdateUnits(units.toMutableList().also { list ->
-                                        val newProfiles = unit.profiles.toMutableList().also { if (it.size > 1) it.removeAt(pIndex) }
+                                        val newProfiles = unit.profiles.toMutableList().also {
+                                            if (it.size > 1) it.removeAt(pIndex)
+                                        }
                                         list[unitIndex] = unit.copy(profiles = newProfiles)
                                     })
                                 }
@@ -295,7 +308,10 @@ private fun ProfileEditor(
                 horizontalArrangement = Arrangement.spacedBy(12.dp),
                 modifier = Modifier.fillMaxWidth()
             ) {
-                Checkbox(checked = profile.active, onCheckedChange = { ok -> onChange(profile.copy(active = ok)) })
+                Checkbox(
+                    checked = profile.active,
+                    onCheckedChange = { ok -> onChange(profile.copy(active = ok)) }
+                )
                 OutlinedTextField(
                     value = profile.name,
                     onValueChange = { newName -> onChange(profile.copy(name = newName)) },
@@ -303,11 +319,17 @@ private fun ProfileEditor(
                     singleLine = true,
                     modifier = Modifier.weight(1f)
                 )
-                TextButton(onClick = {
-                    val next = if (profile.attackType == AttackType.MELEE) AttackType.SHOOT else AttackType.MELEE
-                    onChange(profile.copy(attackType = next))
-                }) { Text(if (profile.attackType == AttackType.MELEE) "Melee" else "Shoot") }
-                TextButton(onClick = { expanded = !expanded }) { Text(if (expanded) "▼" else "▶") }
+                TextButton(
+                    onClick = {
+                        val next = if (profile.attackType == AttackType.MELEE) AttackType.SHOOT else AttackType.MELEE
+                        onChange(profile.copy(attackType = next))
+                    }
+                ) {
+                    Text(if (profile.attackType == AttackType.MELEE) "Melee" else "Shoot")
+                }
+                TextButton(onClick = { expanded = !expanded }) {
+                    Text(if (expanded) "▼" else "▶")
+                }
             }
 
             Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.Start) {
@@ -375,7 +397,7 @@ private fun ProfileEditor(
     }
 }
 
-// ===== numeric fields =====
+// ===== Champs numériques =====
 @Composable
 private fun NumberField(value: Int, onValue: (Int) -> Unit) {
     OutlinedTextField(
@@ -494,24 +516,40 @@ fun SimulationTab(units: List<UnitEntry>, target: TargetConfig) {
     }
 }
 
-/* ===== mappings UI <-> domain ===== */
+/* ===== Mapping UI <-> Domain (inclut aoa) ===== */
 private fun TargetConfig.toDomain(): com.samohammer.app.model.TargetConfig =
     com.samohammer.app.model.TargetConfig(
-        wardNeeded = wardNeeded,
-        debuffHitEnabled = debuffHitEnabled,
-        debuffHitValue = debuffHitValue
+        wardNeeded = this.wardNeeded,
+        debuffHitEnabled = this.debuffHitEnabled,
+        debuffHitValue = this.debuffHitValue
     )
 private fun com.samohammer.app.model.TargetConfig.toUi(): TargetConfig =
-    TargetConfig(wardNeeded, debuffHitEnabled, debuffHitValue)
+    TargetConfig(
+        wardNeeded = this.wardNeeded,
+        debuffHitEnabled = this.debuffHitEnabled,
+        debuffHitValue = this.debuffHitValue
+    )
 
 private fun com.samohammer.app.model.AttackProfile.toUi(): AttackProfile =
     AttackProfile(
-        name, when (attackType) {
+        name = name,
+        attackType = when (attackType) {
             com.samohammer.app.model.AttackType.MELEE -> AttackType.MELEE
             com.samohammer.app.model.AttackType.SHOOT -> AttackType.SHOOT
         },
-        models, attacks, toHit, toWound, rend, damage, active, twoHits, autoW, mortal, aoa = false
+        models = models,
+        attacks = attacks,
+        toHit = toHit,
+        toWound = toWound,
+        rend = rend,
+        damage = damage,
+        active = active,
+        twoHits = twoHits,
+        autoW = autoW,
+        mortal = mortal,
+        aoa = aoa // persisté
     )
+
 private fun AttackProfile.toDomain(): com.samohammer.app.model.AttackProfile =
     com.samohammer.app.model.AttackProfile(
         id = com.samohammer.app.util.newUuid(),
@@ -529,10 +567,12 @@ private fun AttackProfile.toDomain(): com.samohammer.app.model.AttackProfile =
         active = active,
         twoHits = twoHits,
         autoW = autoW,
-        mortal = mortal
+        mortal = mortal,
+        aoa = aoa // persisté
     )
+
 private fun com.samohammer.app.model.UnitEntry.toUi(): UnitEntry =
-    UnitEntry(name, active, profiles.map { it.toUi() })
+    UnitEntry(name = name, active = active, profiles = profiles.map { it.toUi() })
 private fun UnitEntry.toDomain(): com.samohammer.app.model.UnitEntry =
     com.samohammer.app.model.UnitEntry(
         id = com.samohammer.app.util.newUuid(),
