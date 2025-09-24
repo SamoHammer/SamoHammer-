@@ -1,6 +1,7 @@
-// V1.2.10 — UI stable + moteur critique
-// Ajout : persistance Units + Target via AppStateViewModel (DataStore)
-// Patch : mappings Domain<->UI pour Units/Profiles (UI sans id -> id généré côté Domain)
+// V2.0.1 — UI tweak (grille de 7 cases à cocher dans ProfileEditor, libellé au-dessus)
+// - Ajout UI-only (non persisté, non branché moteur) : AoA, +1 Wound, +1 Dmg, +1 Rend
+// - Anciennes cases conservées : 2Hits, AutoW, Mortal
+// - Reste inchangé : persistance Units+Target (DataStore), moteur, mapping Domain<->UI
 
 package com.samohammer.app
 
@@ -103,7 +104,7 @@ class MainActivity : ComponentActivity() {
 }
 
 // -------------------------
-// Modèles UI (inchangés)
+// Modèles UI (inchangés côté logique, + 4 booleans UI-only)
 // -------------------------
 enum class AttackType { MELEE, SHOOT }
 
@@ -117,9 +118,14 @@ data class AttackProfile(
     val rend: Int = 0,
     val damage: Int = 1,
     val active: Boolean = true,
-    val twoHits: Boolean = false,
-    val autoW: Boolean = false,
-    val mortal: Boolean = false
+    val twoHits: Boolean = false,    // existant
+    val autoW: Boolean = false,      // existant
+    val mortal: Boolean = false,     // existant
+    // --- Nouveaux (UI-only, non persistés, non utilisés moteur pour l’instant)
+    val aoa: Boolean = false,            // "AoA"
+    val plusOneWound: Boolean = false,   // "+1 Wound"
+    val plusOneDamage: Boolean = false,  // "+1 Dmg"
+    val plusOneRend: Boolean = false     // "+1 Rend"
 )
 
 data class UnitEntry(
@@ -308,6 +314,23 @@ private fun LabeledCheckbox(text: String, checked: Boolean, onCheckedChange: (Bo
     }
 }
 
+// Nouveau helper : libellé au-dessus, case en dessous (centrée)
+@Composable
+private fun TopLabeledCheckbox(
+    label: String,
+    checked: Boolean,
+    onCheckedChange: (Boolean) -> Unit,
+    modifier: Modifier = Modifier
+) {
+    Column(
+        horizontalAlignment = Alignment.CenterHorizontally,
+        modifier = modifier
+    ) {
+        Text(label, style = MaterialTheme.typography.labelSmall)
+        Checkbox(checked = checked, onCheckedChange = onCheckedChange)
+    }
+}
+
 @Composable
 private fun ProfileEditor(
     profile: AttackProfile,
@@ -346,7 +369,7 @@ private fun ProfileEditor(
                         onChange(profile.copy(attackType = next))
                     }
                 ) {
-                    Text(if (profile.attackType == AttackType.MELEE) "Melee" else "Shoot")
+                    Text(text = if (profile.attackType == AttackType.MELEE) "Melee" else "Shoot")
                 }
                 TextButton(onClick = { expanded = !expanded }) {
                     Text(if (expanded) "▼" else "▶")
@@ -367,24 +390,44 @@ private fun ProfileEditor(
                     horizontalArrangement = Arrangement.spacedBy(16.dp),
                     verticalAlignment = Alignment.Top
                 ) {
-                    // Champs numériques (gauche)
+                    // Colonne gauche : 2 lignes de 3 champs (labels au-dessus, ~50dp)
                     Column(verticalArrangement = Arrangement.spacedBy(10.dp), modifier = Modifier.weight(1f)) {
                         Row(horizontalArrangement = Arrangement.spacedBy(12.dp), modifier = Modifier.fillMaxWidth()) {
                             TopLabeled("Size") { NumberField(profile.models) { v -> onChange(profile.copy(models = v)) } }
-                            TopLabeled("Atk") { NumberField(profile.attacks) { v -> onChange(profile.copy(attacks = v)) } }
-                            TopLabeled("Hit") { GateField2to6(profile.toHit) { v -> onChange(profile.copy(toHit = v)) } }
+                            TopLabeled("Atk")  { NumberField(profile.attacks) { v -> onChange(profile.copy(attacks = v)) } }
+                            TopLabeled("Hit")  { GateField2to6(profile.toHit) { v -> onChange(profile.copy(toHit = v)) } }
                         }
                         Row(horizontalArrangement = Arrangement.spacedBy(12.dp), modifier = Modifier.fillMaxWidth()) {
-                            TopLabeled("Wnd") { GateField2to6(profile.toWound) { v -> onChange(profile.copy(toWound = v)) } }
+                            TopLabeled("Wnd")  { GateField2to6(profile.toWound) { v -> onChange(profile.copy(toWound = v)) } }
                             TopLabeled("Rend") { NumberField(profile.rend) { v -> onChange(profile.copy(rend = v)) } }
-                            TopLabeled("Dmg") { NumberField(profile.damage) { v -> onChange(profile.copy(damage = v)) } }
+                            TopLabeled("Dmg")  { NumberField(profile.damage) { v -> onChange(profile.copy(damage = v)) } }
                         }
                     }
-                    // Cases à cocher (droite)
-                    Column(verticalArrangement = Arrangement.spacedBy(8.dp), horizontalAlignment = Alignment.Start) {
-                        LabeledCheckbox("2Hits", profile.twoHits) { onChange(profile.copy(twoHits = it)) }
-                        LabeledCheckbox("AutoW", profile.autoW) { onChange(profile.copy(autoW = it)) }
-                        LabeledCheckbox("Mortal", profile.mortal) { onChange(profile.copy(mortal = it)) }
+
+                    // Colonne droite : grille 4 + 3 (libellé au-dessus de chaque checkbox)
+                    Column(
+                        verticalArrangement = Arrangement.spacedBy(8.dp),
+                        horizontalAlignment = Alignment.Start
+                    ) {
+                        // Rangée 1 : 4 cases
+                        Row(
+                            horizontalArrangement = Arrangement.spacedBy(12.dp),
+                            verticalAlignment = Alignment.Top
+                        ) {
+                            TopLabeledCheckbox("2Hits", profile.twoHits, { onChange(profile.copy(twoHits = it)) }, Modifier.width(80.dp))
+                            TopLabeledCheckbox("AutoW", profile.autoW, { onChange(profile.copy(autoW = it)) }, Modifier.width(80.dp))
+                            TopLabeledCheckbox("Mortal", profile.mortal, { onChange(profile.copy(mortal = it)) }, Modifier.width(80.dp))
+                            TopLabeledCheckbox("AoA", profile.aoa, { onChange(profile.copy(aoa = it)) }, Modifier.width(80.dp))
+                        }
+                        // Rangée 2 : 3 cases
+                        Row(
+                            horizontalArrangement = Arrangement.spacedBy(12.dp),
+                            verticalAlignment = Alignment.Top
+                        ) {
+                            TopLabeledCheckbox("+1 Wound", profile.plusOneWound, { onChange(profile.copy(plusOneWound = it)) }, Modifier.width(90.dp))
+                            TopLabeledCheckbox("+1 Dmg", profile.plusOneDamage, { onChange(profile.copy(plusOneDamage = it)) }, Modifier.width(90.dp))
+                            TopLabeledCheckbox("+1 Rend", profile.plusOneRend, { onChange(profile.copy(plusOneRend = it)) }, Modifier.width(90.dp))
+                        }
                     }
                 }
             }
@@ -568,6 +611,7 @@ private fun com.samohammer.app.model.AttackProfile.toUi(): AttackProfile =
         twoHits = twoHits,
         autoW = autoW,
         mortal = mortal
+        // Les 4 nouveaux flags UI n'existent pas côté Domain → restent à false par défaut
     )
 
 private fun AttackProfile.toDomain(): com.samohammer.app.model.AttackProfile =
@@ -588,6 +632,7 @@ private fun AttackProfile.toDomain(): com.samohammer.app.model.AttackProfile =
         twoHits = twoHits,
         autoW = autoW,
         mortal = mortal
+        // Les 4 nouveaux flags UI ne sont pas mappés vers Domain (UI-only)
     )
 
 private fun com.samohammer.app.model.UnitEntry.toUi(): UnitEntry =
