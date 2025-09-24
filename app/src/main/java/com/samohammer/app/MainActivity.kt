@@ -1,7 +1,6 @@
-// V2.0.1 — UI: ajout d’une seule case "AoA" dans ProfileEditor (UI-only)
-// - "AoA" est un boolean dans le modèle UI AttackProfile (par défaut false)
-// - Non persisté, non branché au moteur (placeholder)
-// - Tout le reste identique à la baseline 2.0.0
+// V2.0.1 — UI: ajout "AoA" + grille 2×2 à droite (colonne droite en weight(1f))
+// - Les 4 cases (2Hits, AutoW, Mortal, AoA) s'organisent en 2 colonnes équilibrées
+// - Aucune autre modif : persistance/moteur/mappings inchangés
 
 package com.samohammer.app
 
@@ -117,7 +116,7 @@ data class AttackProfile(
     val twoHits: Boolean = false,
     val autoW: Boolean = false,
     val mortal: Boolean = false,
-    // NEW (UI-only, non persisté, non utilisé moteur pour l’instant)
+    // NEW (UI-only)
     val aoa: Boolean = false
 )
 
@@ -161,7 +160,7 @@ private fun wardFactor(wardNeeded: Int): Double {
 }
 private fun expectedDamageForProfile(p: AttackProfile, target: TargetConfig, baseSave: Int?): Double {
     if (!p.active) return 0.0
-    val attacks = kotlin.math.max(p.models, 0) * kotlin.math.max(p.attacks, 0)
+    val attacks = max(p.models, 0) * max(p.attacks, 0)
     if (attacks == 0) return 0.0
     val debuff = if (target.debuffHitEnabled) target.debuffHitValue else 0
     val effHit = effectiveHitThreshold(p.toHit, debuff)
@@ -365,8 +364,11 @@ private fun ProfileEditor(
                     horizontalArrangement = Arrangement.spacedBy(16.dp),
                     verticalAlignment = Alignment.Top
                 ) {
-                    // Gauche : attributs
-                    Column(verticalArrangement = Arrangement.spacedBy(10.dp), modifier = Modifier.weight(1f)) {
+                    // Gauche : attributs (prend 50%)
+                    Column(
+                        verticalArrangement = Arrangement.spacedBy(10.dp),
+                        modifier = Modifier.weight(1f)
+                    ) {
                         Row(horizontalArrangement = Arrangement.spacedBy(12.dp), modifier = Modifier.fillMaxWidth()) {
                             TopLabeled("Size") { NumberField(profile.models) { v -> onChange(profile.copy(models = v)) } }
                             TopLabeled("Atk")  { NumberField(profile.attacks) { v -> onChange(profile.copy(attacks = v)) } }
@@ -378,13 +380,23 @@ private fun ProfileEditor(
                             TopLabeled("Dmg")  { NumberField(profile.damage) { v -> onChange(profile.copy(damage = v)) } }
                         }
                     }
-                    // Droite : 3 cases + AoA (4ème) — simple ajout sous les trois existantes
-                    Column(verticalArrangement = Arrangement.spacedBy(8.dp), horizontalAlignment = Alignment.Start) {
-                        LabeledCheckbox("2Hits", profile.twoHits) { onChange(profile.copy(twoHits = it)) }
-                        LabeledCheckbox("AutoW", profile.autoW) { onChange(profile.copy(autoW = it)) }
-                        LabeledCheckbox("Mortal", profile.mortal) { onChange(profile.copy(mortal = it)) }
-                        Divider(thickness = 0.5.dp)
-                        LabeledCheckbox("AoA", profile.aoa) { onChange(profile.copy(aoa = it)) }
+
+                    // Droite : prend 50% et étale les cases en 2 colonnes équilibrées
+                    Row(
+                        modifier = Modifier
+                            .weight(1f)
+                            .fillMaxWidth(),
+                        horizontalArrangement = Arrangement.SpaceEvenly,
+                        verticalAlignment = Alignment.Top
+                    ) {
+                        Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                            LabeledCheckbox("2Hits", profile.twoHits) { onChange(profile.copy(twoHits = it)) }
+                            LabeledCheckbox("Mortal", profile.mortal) { onChange(profile.copy(mortal = it)) }
+                        }
+                        Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                            LabeledCheckbox("AutoW", profile.autoW) { onChange(profile.copy(autoW = it)) }
+                            LabeledCheckbox("AoA", profile.aoa) { onChange(profile.copy(aoa = it)) }
+                        }
                     }
                 }
             }
@@ -567,8 +579,8 @@ private fun com.samohammer.app.model.AttackProfile.toUi(): AttackProfile =
         active = active,
         twoHits = twoHits,
         autoW = autoW,
-        mortal = mortal
-        // aoa est UI-only → default false côté UI
+        mortal = mortal,
+        aoa = false // UI-only par défaut
     )
 
 private fun AttackProfile.toDomain(): com.samohammer.app.model.AttackProfile =
