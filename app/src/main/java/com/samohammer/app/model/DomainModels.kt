@@ -25,7 +25,8 @@ data class AttackProfile(
     // Flags critiques (déclenchés sur 6 naturel)
     val twoHits: Boolean = false,
     val autoW: Boolean = false,
-    val mortal: Boolean = false
+    val mortal: Boolean = false,
+    val aoa: Boolean = false   // NEW: All-out Attack (+1 to Hit)
 )
 
 data class UnitEntry(
