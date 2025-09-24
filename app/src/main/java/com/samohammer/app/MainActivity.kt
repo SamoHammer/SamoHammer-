@@ -1,8 +1,8 @@
-// V2.1.2 — Numeric UX
-// - Champs numériques: autorisent vide pendant l’édition, clear on focus, persistance live quand valide
-// - Au blur si vide: Hit/Wound -> 4 ; Size/Atk/Rend/Dmg -> 0
-// - Noms: commit-on-blur (hérité V2.1.1)
-// - AoA persisté + effet moteur (+1 to Hit, min 2+)
+// V2.1.3 — UI: boutons Delete à droite
+// - "Delete Unit" aligné complètement à droite de la ligne d’actions d’unité
+// - "Delete Profile" aligné complètement à droite de la ligne d’actions du profil
+// - Conserve V2.1.2 (numeric UX: clear on focus, vide autorisé, persistance live, blur default)
+// - Conserve V2.1.1 (noms commit-on-blur) et V2.1.0 (AoA persisté + moteur)
 
 package com.samohammer.app
 
@@ -221,28 +221,31 @@ fun ProfilesTab(units: List<UnitEntry>, onUpdateUnits: (List<UnitEntry>) -> Unit
                         }
                     }
 
-                    // Actions unité
+                    // Actions unité: Add à gauche, Delete totalement à droite
                     Row(
                         modifier = Modifier.fillMaxWidth(),
-                        horizontalArrangement = Arrangement.Start,
-                        verticalAlignment = Alignment.CenterVertically
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.SpaceBetween
                     ) {
-                        TextButton(onClick = {
-                            onUpdateUnits(
-                                units.toMutableList().also { list ->
-                                    val newProfiles = unit.profiles + AttackProfile(name = "Weapon Profile")
-                                    list[unitIndex] = unit.copy(profiles = newProfiles)
+                        Row(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
+                            TextButton(onClick = {
+                                onUpdateUnits(
+                                    units.toMutableList().also { list ->
+                                        val newProfiles = unit.profiles + AttackProfile(name = "Weapon Profile")
+                                        list[unitIndex] = unit.copy(profiles = newProfiles)
+                                    }
+                                )
+                            }) { Text("Add Profile") }
+                        }
+                        Row {
+                            TextButton(
+                                onClick = {
+                                    if (units.size > 1) {
+                                        onUpdateUnits(units.toMutableList().also { it.removeAt(unitIndex) })
+                                    }
                                 }
-                            )
-                        }) { Text("Add Profile") }
-
-                        Spacer(Modifier.width(12.dp))
-
-                        TextButton(onClick = {
-                            if (units.size > 1) {
-                                onUpdateUnits(units.toMutableList().also { it.removeAt(unitIndex) })
-                            }
-                        }) { Text("Delete Unit") }
+                            ) { Text("Delete Unit") }
+                        }
                     }
 
                     if (expanded) {
@@ -359,8 +362,11 @@ private fun ProfileEditor(
                 }
             }
 
-            // Action suppression
-            Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.Start) {
+            // Delete Profile totalement à droite
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.End
+            ) {
                 TextButton(onClick = onRemove) { Text("Delete Profile") }
             }
 
@@ -463,9 +469,7 @@ private fun NumberField(
     defaultOnBlur: Int,
     onValue: (Int) -> Unit
 ) {
-    // Texte local qui peut être vide
     var text by remember(value) { mutableStateOf(value.toString()) }
-    // Savoir si on vient de focus pour vider
     var hadFocus by remember { mutableStateOf(false) }
 
     Column {
@@ -473,16 +477,13 @@ private fun NumberField(
         OutlinedTextField(
             value = text,
             onValueChange = { newText ->
-                // autoriser vide et chiffres
                 val digits = newText.filter { it.isDigit() }
                 if (digits.isEmpty()) {
                     text = ""
-                    // pas d'onValue -> on garde la dernière valeur persistée
                 } else {
-                    // autoriser plusieurs chiffres
                     text = digits
                     val v = digits.toIntOrNull()
-                    if (v != null) onValue(v) // persistance live dès que valide
+                    if (v != null) onValue(v) // persistance live si valide
                 }
             },
             singleLine = true,
@@ -492,14 +493,12 @@ private fun NumberField(
                 .onFocusChanged { st ->
                     if (st.isFocused && !hadFocus) {
                         hadFocus = true
-                        // clear on focus
-                        text = ""
+                        text = "" // clear on focus
                     } else if (!st.isFocused) {
                         hadFocus = false
-                        // blur: si vide, remettre default et persister
                         if (text.isEmpty()) {
                             text = defaultOnBlur.toString()
-                            onValue(defaultOnBlur)
+                            onValue(defaultOnBlur) // blur default
                         }
                     }
                 }
@@ -526,7 +525,6 @@ private fun GateField2to6(
                 if (digits.isEmpty()) {
                     text = ""
                 } else {
-                    // ne prendre qu'UN seul chiffre (borné par nature)
                     val d1 = digits.take(1)
                     text = d1
                     val v = d1.toIntOrNull()
@@ -546,9 +544,8 @@ private fun GateField2to6(
                         hadFocus = false
                         if (text.isEmpty()) {
                             text = defaultOnBlur.toString()
-                            onValue(defaultOnBlur) // blur default
+                            onValue(defaultOnBlur)
                         } else {
-                            // si contenu non valide (ex: "1"), corriger au blur
                             val v = text.toIntOrNull()
                             if (v == null || v !in 2..6) {
                                 text = defaultOnBlur.toString()
