@@ -1,7 +1,8 @@
-// V2.1.1 — Commit-on-blur pour les champs texte (Unit name, Profile name)
-// - Les noms s’éditent en local et NE sont persistés que quand le champ perd le focus.
-// - Chiffres & checkboxes restent en écriture immédiate.
-// - AoA (V2.1.0) toujours persisté + appliqué au moteur. UI inchangée visuellement.
+// V2.1.2 — Numeric UX
+// - Champs numériques: autorisent vide pendant l’édition, clear on focus, persistance live quand valide
+// - Au blur si vide: Hit/Wound -> 4 ; Size/Atk/Rend/Dmg -> 0
+// - Noms: commit-on-blur (hérité V2.1.1)
+// - AoA persisté + effet moteur (+1 to Hit, min 2+)
 
 package com.samohammer.app
 
@@ -86,7 +87,7 @@ class MainActivity : ComponentActivity() {
     }
 }
 
-// ===== UI models (UI inchangée) =====
+// ===== UI models =====
 enum class AttackType { MELEE, SHOOT }
 
 data class AttackProfile(
@@ -149,13 +150,11 @@ private fun expectedDamageForProfile(p: AttackProfile, target: TargetConfig, bas
     if (attacks == 0) return 0.0
     val debuff = if (target.debuffHitEnabled) target.debuffHitValue else 0
     val effHit = effectiveHitThreshold(p.toHit, debuff, p.aoa)
-
     val p6 = 1.0 / 6.0
     val phNon6 = pHitNonSix(effHit)
     val pw = pWound(p.toWound)
     val pu = pUnsaved(baseSave, p.rend)
     val ward = wardFactor(target.wardNeeded)
-
     val evNon6 = phNon6 * pw * pu * p.damage
     val mult6 = if (p.twoHits) 2.0 else 1.0
     val pw6 = if (p.mortal || p.autoW) 1.0 else pw
@@ -170,7 +169,7 @@ private fun expectedDamageForUnit(u: UnitEntry, target: TargetConfig, baseSave: 
 private fun expectedDamageAll(units: List<UnitEntry>, target: TargetConfig, baseSave: Int?): Double =
     units.filter { it.active }.sumOf { expectedDamageForUnit(it, target, baseSave) }
 
-// ===== Profils (commit-on-blur pour les noms) =====
+// ===== Profils =====
 @Composable
 fun ProfilesTab(units: List<UnitEntry>, onUpdateUnits: (List<UnitEntry>) -> Unit) {
     LazyColumn(
@@ -184,7 +183,7 @@ fun ProfilesTab(units: List<UnitEntry>, onUpdateUnits: (List<UnitEntry>) -> Unit
                     modifier = Modifier.fillMaxWidth().padding(12.dp),
                     verticalArrangement = Arrangement.spacedBy(12.dp)
                 ) {
-                    // Ligne entête unité
+                    // Header unité
                     Row(
                         verticalAlignment = Alignment.CenterVertically,
                         horizontalArrangement = Arrangement.spacedBy(12.dp),
@@ -199,7 +198,7 @@ fun ProfilesTab(units: List<UnitEntry>, onUpdateUnits: (List<UnitEntry>) -> Unit
                             }
                         )
 
-                        // --- Unit name: commit on blur ---
+                        // Unit name: commit-on-blur (V2.1.1)
                         var unitNameText by remember(unit.name) { mutableStateOf(unit.name) }
                         OutlinedTextField(
                             value = unitNameText,
@@ -266,7 +265,6 @@ fun ProfilesTab(units: List<UnitEntry>, onUpdateUnits: (List<UnitEntry>) -> Unit
                                         list[unitIndex] = unit.copy(profiles = newProfiles)
                                     })
                                 },
-                                // pour commit-on-blur du nom du profil
                                 onCommitProfileName = { newName ->
                                     onUpdateUnits(units.toMutableList().also { list ->
                                         val newProfiles = unit.profiles.toMutableList()
@@ -321,7 +319,7 @@ private fun ProfileEditor(
             modifier = Modifier.fillMaxWidth().padding(12.dp),
             verticalArrangement = Arrangement.spacedBy(12.dp)
         ) {
-            // Header du profil
+            // Header profil
             Row(
                 verticalAlignment = Alignment.CenterVertically,
                 horizontalArrangement = Arrangement.spacedBy(12.dp),
@@ -332,7 +330,7 @@ private fun ProfileEditor(
                     onCheckedChange = { ok -> onChange(profile.copy(active = ok)) }
                 )
 
-                // --- Profile name: commit on blur ---
+                // Profile name: commit-on-blur (V2.1.1)
                 var profileNameText by remember(profile.name) { mutableStateOf(profile.name) }
                 OutlinedTextField(
                     value = profileNameText,
@@ -361,7 +359,7 @@ private fun ProfileEditor(
                 }
             }
 
-            // Bouton suppression
+            // Action suppression
             Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.Start) {
                 TextButton(onClick = onRemove) { Text("Delete Profile") }
             }
@@ -373,24 +371,54 @@ private fun ProfileEditor(
                     horizontalArrangement = Arrangement.SpaceBetween,
                     verticalAlignment = Alignment.Top
                 ) {
-                    // Colonne gauche : champs (écriture immédiate)
+                    // Colonne gauche : champs numériques (V2.1.2 UX)
                     Column(
                         verticalArrangement = Arrangement.spacedBy(10.dp),
                         modifier = Modifier.weight(1f)
                     ) {
                         Row(horizontalArrangement = Arrangement.spacedBy(12.dp), modifier = Modifier.fillMaxWidth()) {
-                            TopLabeled("Size") { NumberField(profile.models) { v -> onChange(profile.copy(models = v)) } }
-                            TopLabeled("Atk")  { NumberField(profile.attacks) { v -> onChange(profile.copy(attacks = v)) } }
-                            TopLabeled("Hit")  { GateField2to6(profile.toHit) { v -> onChange(profile.copy(toHit = v)) } }
+                            NumberField(
+                                label = "Size",
+                                value = profile.models,
+                                defaultOnBlur = 0,
+                                onValue = { v -> onChange(profile.copy(models = v)) }
+                            )
+                            NumberField(
+                                label = "Atk",
+                                value = profile.attacks,
+                                defaultOnBlur = 0,
+                                onValue = { v -> onChange(profile.copy(attacks = v)) }
+                            )
+                            GateField2to6(
+                                label = "Hit",
+                                value = profile.toHit,
+                                defaultOnBlur = 4,
+                                onValue = { v -> onChange(profile.copy(toHit = v)) }
+                            )
                         }
                         Row(horizontalArrangement = Arrangement.spacedBy(12.dp), modifier = Modifier.fillMaxWidth()) {
-                            TopLabeled("Wnd")  { GateField2to6(profile.toWound) { v -> onChange(profile.copy(toWound = v)) } }
-                            TopLabeled("Rend") { NumberField(profile.rend) { v -> onChange(profile.copy(rend = v)) } }
-                            TopLabeled("Dmg")  { NumberField(profile.damage) { v -> onChange(profile.copy(damage = v)) } }
+                            GateField2to6(
+                                label = "Wnd",
+                                value = profile.toWound,
+                                defaultOnBlur = 4,
+                                onValue = { v -> onChange(profile.copy(toWound = v)) }
+                            )
+                            NumberField(
+                                label = "Rend",
+                                value = profile.rend,
+                                defaultOnBlur = 0,
+                                onValue = { v -> onChange(profile.copy(rend = v)) }
+                            )
+                            NumberField(
+                                label = "Dmg",
+                                value = profile.damage,
+                                defaultOnBlur = 0,
+                                onValue = { v -> onChange(profile.copy(damage = v)) }
+                            )
                         }
                     }
 
-                    // Colonne droite : checkboxes (écriture immédiate), collée à droite
+                    // Colonne droite : checkboxes (persist immédiat)
                     Column(
                         verticalArrangement = Arrangement.spacedBy(12.dp),
                         horizontalAlignment = Alignment.End,
@@ -427,40 +455,113 @@ private fun ProfileEditor(
     }
 }
 
-// ===== Champs numériques (écriture immédiate) =====
+// ===== Composants numériques (V2.1.2 UX) =====
 @Composable
-private fun NumberField(value: Int, onValue: (Int) -> Unit) {
-    OutlinedTextField(
-        value = value.toString(),
-        onValueChange = { txt ->
-            val digits = txt.filter { ch -> ch.isDigit() }
-            onValue(if (digits.isEmpty()) 0 else digits.toInt())
-        },
-        singleLine = true,
-        keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
-        modifier = Modifier.size(width = 58.dp, height = 50.dp)
-    )
-}
-
-@Composable
-private fun GateField2to6(value: Int, onValue: (Int) -> Unit) {
+private fun NumberField(
+    label: String,
+    value: Int,
+    defaultOnBlur: Int,
+    onValue: (Int) -> Unit
+) {
+    // Texte local qui peut être vide
     var text by remember(value) { mutableStateOf(value.toString()) }
-    OutlinedTextField(
-        value = text,
-        onValueChange = { newText ->
-            val digits = newText.filter { ch -> ch.isDigit() }.take(1)
-            text = digits
-            val v = digits.toIntOrNull()
-            if (v != null && v in 2..6) onValue(v)
-        },
-        placeholder = { Text("2..6") },
-        singleLine = true,
-        keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
-        modifier = Modifier.size(width = 58.dp, height = 50.dp)
-    )
+    // Savoir si on vient de focus pour vider
+    var hadFocus by remember { mutableStateOf(false) }
+
+    Column {
+        Text(label, style = MaterialTheme.typography.labelSmall)
+        OutlinedTextField(
+            value = text,
+            onValueChange = { newText ->
+                // autoriser vide et chiffres
+                val digits = newText.filter { it.isDigit() }
+                if (digits.isEmpty()) {
+                    text = ""
+                    // pas d'onValue -> on garde la dernière valeur persistée
+                } else {
+                    // autoriser plusieurs chiffres
+                    text = digits
+                    val v = digits.toIntOrNull()
+                    if (v != null) onValue(v) // persistance live dès que valide
+                }
+            },
+            singleLine = true,
+            keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
+            modifier = Modifier
+                .size(width = 58.dp, height = 50.dp)
+                .onFocusChanged { st ->
+                    if (st.isFocused && !hadFocus) {
+                        hadFocus = true
+                        // clear on focus
+                        text = ""
+                    } else if (!st.isFocused) {
+                        hadFocus = false
+                        // blur: si vide, remettre default et persister
+                        if (text.isEmpty()) {
+                            text = defaultOnBlur.toString()
+                            onValue(defaultOnBlur)
+                        }
+                    }
+                }
+        )
+    }
 }
 
-// ===== Target tab (inchangé) =====
+@Composable
+private fun GateField2to6(
+    label: String,
+    value: Int,
+    defaultOnBlur: Int,
+    onValue: (Int) -> Unit
+) {
+    var text by remember(value) { mutableStateOf(value.toString()) }
+    var hadFocus by remember { mutableStateOf(false) }
+
+    Column {
+        Text(label, style = MaterialTheme.typography.labelSmall)
+        OutlinedTextField(
+            value = text,
+            onValueChange = { newText ->
+                val digits = newText.filter { it.isDigit() }
+                if (digits.isEmpty()) {
+                    text = ""
+                } else {
+                    // ne prendre qu'UN seul chiffre (borné par nature)
+                    val d1 = digits.take(1)
+                    text = d1
+                    val v = d1.toIntOrNull()
+                    if (v != null && v in 2..6) onValue(v) // persistance live si valide
+                }
+            },
+            placeholder = { Text("2..6") },
+            singleLine = true,
+            keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
+            modifier = Modifier
+                .size(width = 58.dp, height = 50.dp)
+                .onFocusChanged { st ->
+                    if (st.isFocused && !hadFocus) {
+                        hadFocus = true
+                        text = "" // clear on focus
+                    } else if (!st.isFocused) {
+                        hadFocus = false
+                        if (text.isEmpty()) {
+                            text = defaultOnBlur.toString()
+                            onValue(defaultOnBlur) // blur default
+                        } else {
+                            // si contenu non valide (ex: "1"), corriger au blur
+                            val v = text.toIntOrNull()
+                            if (v == null || v !in 2..6) {
+                                text = defaultOnBlur.toString()
+                                onValue(defaultOnBlur)
+                            }
+                        }
+                    }
+                }
+        )
+    }
+}
+
+// ===== Target tab =====
 @Composable
 fun TargetTab(target: TargetConfig, onUpdate: (TargetConfig) -> Unit) {
     Column(
@@ -468,7 +569,6 @@ fun TargetTab(target: TargetConfig, onUpdate: (TargetConfig) -> Unit) {
         verticalArrangement = Arrangement.spacedBy(12.dp)
     ) {
         Text("Target buffs/debuffs", style = MaterialTheme.typography.titleMedium)
-
         Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
             Text("Ward")
             var wardTxt by remember(target.wardNeeded) {
@@ -477,7 +577,7 @@ fun TargetTab(target: TargetConfig, onUpdate: (TargetConfig) -> Unit) {
             OutlinedTextField(
                 value = wardTxt,
                 onValueChange = { newText ->
-                    val digits = newText.filter { ch -> ch.isDigit() }.take(1)
+                    val digits = newText.filter { it.isDigit() }.take(1)
                     wardTxt = digits
                     val v = digits.toIntOrNull()
                     onUpdate(target.copy(wardNeeded = if (v != null && v in 2..6) v else 0))
@@ -489,7 +589,6 @@ fun TargetTab(target: TargetConfig, onUpdate: (TargetConfig) -> Unit) {
             )
             Text(text = if (target.wardNeeded in 2..6) "${target.wardNeeded}+" else "off")
         }
-
         Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
             Checkbox(
                 checked = target.debuffHitEnabled,
@@ -501,7 +600,7 @@ fun TargetTab(target: TargetConfig, onUpdate: (TargetConfig) -> Unit) {
             OutlinedTextField(
                 value = target.debuffHitValue.toString(),
                 onValueChange = { newText ->
-                    val digits = newText.filter { ch -> ch.isDigit() }.take(1)
+                    val digits = newText.filter { it.isDigit() }.take(1)
                     val v = digits.toIntOrNull() ?: 0
                     onUpdate(target.copy(debuffHitValue = v.coerceIn(0, 3)))
                 },
@@ -512,12 +611,11 @@ fun TargetTab(target: TargetConfig, onUpdate: (TargetConfig) -> Unit) {
             )
             if (target.debuffHitEnabled) Text("−${target.debuffHitValue} to Hit")
         }
-
         Divider()
     }
 }
 
-// ===== Simulation tab (inchangé) =====
+// ===== Simulation tab =====
 @Composable
 fun SimulationTab(units: List<UnitEntry>, target: TargetConfig) {
     val activeUnits = units.filter { it.active }.take(6)
@@ -526,19 +624,14 @@ fun SimulationTab(units: List<UnitEntry>, target: TargetConfig) {
         verticalArrangement = Arrangement.spacedBy(8.dp)
     ) {
         Text("Damage expectation by Save (per active unit, max 6)", style = MaterialTheme.typography.titleMedium)
-
         if (activeUnits.isEmpty()) {
-            Spacer(Modifier.height(8.dp))
-            Text("No active unit.")
-            return@Column
+            Spacer(Modifier.height(8.dp)); Text("No active unit."); return@Column
         }
-
         Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(12.dp)) {
             Text("Save", modifier = Modifier.width(70.dp))
             activeUnits.forEach { u -> Text(u.name, modifier = Modifier.weight(1f), maxLines = 1) }
         }
         Divider()
-
         val saves = listOf<Int?>(2, 3, 4, 5, 6, null)
         saves.forEach { save ->
             Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(12.dp)) {
