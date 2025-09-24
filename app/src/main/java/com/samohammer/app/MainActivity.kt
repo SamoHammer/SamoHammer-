@@ -1,6 +1,6 @@
-// V2.0.1 — UI: ajout "AoA" + grille 2×2 à droite (colonne droite en weight(1f))
-// - Les 4 cases (2Hits, AutoW, Mortal, AoA) s'organisent en 2 colonnes équilibrées
-// - Aucune autre modif : persistance/moteur/mappings inchangés
+// V2.0.2 — UI: cases à droite en grille 2×2 avec label au-dessus (petite police)
+// - 4 cases: 2Hits, AutoW, Mortal, AoA (UI-only, non persistées, non branchées moteur)
+// - Colonne gauche (attributs) inchangée, moteur/persistance identiques
 
 package com.samohammer.app
 
@@ -19,6 +19,7 @@ import androidx.compose.runtime.*
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.scale
 import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.unit.dp
 
@@ -116,7 +117,7 @@ data class AttackProfile(
     val twoHits: Boolean = false,
     val autoW: Boolean = false,
     val mortal: Boolean = false,
-    // NEW (UI-only)
+    // UI-only
     val aoa: Boolean = false
 )
 
@@ -299,10 +300,17 @@ private fun TopLabeled(label: String, content: @Composable () -> Unit) {
 }
 
 @Composable
-private fun LabeledCheckbox(text: String, checked: Boolean, onCheckedChange: (Boolean) -> Unit) {
-    Row(verticalAlignment = Alignment.CenterVertically) {
-        Checkbox(checked = checked, onCheckedChange = onCheckedChange)
-        Text(text)
+private fun TopLabeledCheckbox(
+    label: String,
+    checked: Boolean,
+    onCheckedChange: (Boolean) -> Unit,
+    modifier: Modifier = Modifier
+) {
+    Column(horizontalAlignment = Alignment.CenterHorizontally, modifier = modifier) {
+        // petite police pour le label
+        Text(label, style = MaterialTheme.typography.labelSmall, maxLines = 1)
+        // case légèrement compacte pour gagner de la place
+        Checkbox(checked = checked, onCheckedChange = onCheckedChange, modifier = Modifier.scale(0.9f))
     }
 }
 
@@ -364,7 +372,7 @@ private fun ProfileEditor(
                     horizontalArrangement = Arrangement.spacedBy(16.dp),
                     verticalAlignment = Alignment.Top
                 ) {
-                    // Gauche : attributs (prend 50%)
+                    // Gauche : attributs (50%)
                     Column(
                         verticalArrangement = Arrangement.spacedBy(10.dp),
                         modifier = Modifier.weight(1f)
@@ -381,21 +389,24 @@ private fun ProfileEditor(
                         }
                     }
 
-                    // Droite : prend 50% et étale les cases en 2 colonnes équilibrées
-                    Row(
-                        modifier = Modifier
-                            .weight(1f)
-                            .fillMaxWidth(),
-                        horizontalArrangement = Arrangement.SpaceEvenly,
-                        verticalAlignment = Alignment.Top
+                    // Droite : grille 2×2, labels au-dessus, petite police
+                    Column(
+                        verticalArrangement = Arrangement.spacedBy(12.dp),
+                        modifier = Modifier.weight(1f)
                     ) {
-                        Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                            LabeledCheckbox("2Hits", profile.twoHits) { onChange(profile.copy(twoHits = it)) }
-                            LabeledCheckbox("Mortal", profile.mortal) { onChange(profile.copy(mortal = it)) }
+                        Row(
+                            modifier = Modifier.fillMaxWidth(),
+                            horizontalArrangement = Arrangement.SpaceEvenly
+                        ) {
+                            TopLabeledCheckbox("2Hits", profile.twoHits) { onChange(profile.copy(twoHits = it)) }
+                            TopLabeledCheckbox("AutoW", profile.autoW) { onChange(profile.copy(autoW = it)) }
                         }
-                        Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                            LabeledCheckbox("AutoW", profile.autoW) { onChange(profile.copy(autoW = it)) }
-                            LabeledCheckbox("AoA", profile.aoa) { onChange(profile.copy(aoa = it)) }
+                        Row(
+                            modifier = Modifier.fillMaxWidth(),
+                            horizontalArrangement = Arrangement.SpaceEvenly
+                        ) {
+                            TopLabeledCheckbox("Mortal", profile.mortal) { onChange(profile.copy(mortal = it)) }
+                            TopLabeledCheckbox("AoA", profile.aoa) { onChange(profile.copy(aoa = it)) }
                         }
                     }
                 }
