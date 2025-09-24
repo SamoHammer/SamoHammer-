@@ -1,6 +1,7 @@
-// V2.0.3 — UI build fix
-// - TopLabeledCheckbox: onCheckedChange avant modifier + appels nommés
-// - TargetTab: corrections "2..6" (plage inclusive) partout
+// V2.0.3+fix — UI: colonne des cases collée à droite (width fixe 140.dp)
+// - Colonne gauche (attributs) en weight(1f) -> prend tout l'espace restant
+// - Colonne droite (checkboxes 2x2) width(140.dp) + align End
+// - Persistance/moteur/mappings inchangés
 
 package com.samohammer.app
 
@@ -374,7 +375,7 @@ private fun ProfileEditor(
                     horizontalArrangement = Arrangement.spacedBy(16.dp),
                     verticalAlignment = Alignment.Top
                 ) {
-                    // Gauche : attributs
+                    // Gauche : attributs (prend tout l'espace restant)
                     Column(
                         verticalArrangement = Arrangement.spacedBy(10.dp),
                         modifier = Modifier.weight(1f)
@@ -391,14 +392,15 @@ private fun ProfileEditor(
                         }
                     }
 
-                    // Droite : grille 2×2, labels au-dessus
+                    // Droite : grille 2×2, labels au-dessus, collée à droite (width fixe)
                     Column(
                         verticalArrangement = Arrangement.spacedBy(12.dp),
-                        modifier = Modifier.weight(1f)
+                        horizontalAlignment = Alignment.End,
+                        modifier = Modifier.width(140.dp)
                     ) {
                         Row(
-                            modifier = Modifier.fillMaxWidth(),
-                            horizontalArrangement = Arrangement.SpaceEvenly
+                            horizontalArrangement = Arrangement.spacedBy(12.dp),
+                            modifier = Modifier.fillMaxWidth()
                         ) {
                             TopLabeledCheckbox(
                                 label = "2Hits",
@@ -412,8 +414,8 @@ private fun ProfileEditor(
                             )
                         }
                         Row(
-                            modifier = Modifier.fillMaxWidth(),
-                            horizontalArrangement = Arrangement.SpaceEvenly
+                            horizontalArrangement = Arrangement.spacedBy(12.dp),
+                            modifier = Modifier.fillMaxWidth()
                         ) {
                             TopLabeledCheckbox(
                                 label = "Mortal",
@@ -589,6 +591,7 @@ private fun com.samohammer.app.model.TargetConfig.toUi(): TargetConfig =
 
 /* -------------------------
    Mapping Units/Profiles UI <-> Domain
+   (UI n’a pas d’id → on en génère un à l’aller)
    ------------------------- */
 private fun com.samohammer.app.model.AttackProfile.toUi(): AttackProfile =
     AttackProfile(
@@ -607,7 +610,7 @@ private fun com.samohammer.app.model.AttackProfile.toUi(): AttackProfile =
         twoHits = twoHits,
         autoW = autoW,
         mortal = mortal,
-        aoa = false
+        aoa = false // UI-only par défaut
     )
 
 private fun AttackProfile.toDomain(): com.samohammer.app.model.AttackProfile =
@@ -628,6 +631,7 @@ private fun AttackProfile.toDomain(): com.samohammer.app.model.AttackProfile =
         twoHits = twoHits,
         autoW = autoW,
         mortal = mortal
+        // aoa non mappé (UI-only)
     )
 
 private fun com.samohammer.app.model.UnitEntry.toUi(): UnitEntry =
