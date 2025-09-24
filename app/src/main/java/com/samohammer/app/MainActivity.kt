@@ -1,5 +1,7 @@
-// V2.1.0 — AoA persisté + moteur: AoA donne +1 pour toucher (min 2+). UI inchangée.
-// Base: V2.0.3+fix4 (colonne cases ancrée à droite, appels nommés sur onCheckedChange)
+// V2.1.1 — Commit-on-blur pour les champs texte (Unit name, Profile name)
+// - Les noms s’éditent en local et NE sont persistés que quand le champ perd le focus.
+// - Chiffres & checkboxes restent en écriture immédiate.
+// - AoA (V2.1.0) toujours persisté + appliqué au moteur. UI inchangée visuellement.
 
 package com.samohammer.app
 
@@ -17,6 +19,7 @@ import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.scale
+import androidx.compose.ui.focus.onFocusChanged
 import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.unit.dp
 import com.samohammer.app.ui.theme.SamoHammerTheme
@@ -114,20 +117,17 @@ data class TargetConfig(
     val debuffHitValue: Int = 1
 )
 
-// ===== Engine (prise en compte de AoA) =====
+// ===== Engine (AoA inclus) =====
 private fun clamp2to6(x: Int) = x.coerceIn(2, 6)
 private fun pGate(needed: Int): Double = when {
     needed <= 1 -> 1.0
     needed >= 7 -> 0.0
     else -> (7 - needed) / 6.0
 }
-
-// AoA = +1 to Hit -> seuil -1, borné [2..6]
 private fun effectiveHitThreshold(baseNeeded: Int, debuff: Int, aoa: Boolean): Int {
     val buff = if (aoa) -1 else 0
-    return clamp2to6(baseNeeded + debuff + buff)
+    return clamp2to6(baseNeeded + debuff + buff) // min 2+, max 6+
 }
-
 private fun pHitNonSix(effNeeded: Int): Double {
     val successes = (6 - effNeeded).coerceAtLeast(0)
     return successes / 6.0
@@ -147,9 +147,8 @@ private fun expectedDamageForProfile(p: AttackProfile, target: TargetConfig, bas
     if (!p.active) return 0.0
     val attacks = max(p.models, 0) * max(p.attacks, 0)
     if (attacks == 0) return 0.0
-
     val debuff = if (target.debuffHitEnabled) target.debuffHitValue else 0
-    val effHit = effectiveHitThreshold(p.toHit, debuff, p.aoa) // <<< AoA appliqué
+    val effHit = effectiveHitThreshold(p.toHit, debuff, p.aoa)
 
     val p6 = 1.0 / 6.0
     val phNon6 = pHitNonSix(effHit)
@@ -171,7 +170,7 @@ private fun expectedDamageForUnit(u: UnitEntry, target: TargetConfig, baseSave: 
 private fun expectedDamageAll(units: List<UnitEntry>, target: TargetConfig, baseSave: Int?): Double =
     units.filter { it.active }.sumOf { expectedDamageForUnit(it, target, baseSave) }
 
-// ===== Onglet Profils (inchangé) =====
+// ===== Profils (commit-on-blur pour les noms) =====
 @Composable
 fun ProfilesTab(units: List<UnitEntry>, onUpdateUnits: (List<UnitEntry>) -> Unit) {
     LazyColumn(
@@ -185,6 +184,7 @@ fun ProfilesTab(units: List<UnitEntry>, onUpdateUnits: (List<UnitEntry>) -> Unit
                     modifier = Modifier.fillMaxWidth().padding(12.dp),
                     verticalArrangement = Arrangement.spacedBy(12.dp)
                 ) {
+                    // Ligne entête unité
                     Row(
                         verticalAlignment = Alignment.CenterVertically,
                         horizontalArrangement = Arrangement.spacedBy(12.dp),
@@ -198,22 +198,31 @@ fun ProfilesTab(units: List<UnitEntry>, onUpdateUnits: (List<UnitEntry>) -> Unit
                                 })
                             }
                         )
+
+                        // --- Unit name: commit on blur ---
+                        var unitNameText by remember(unit.name) { mutableStateOf(unit.name) }
                         OutlinedTextField(
-                            value = unit.name,
-                            onValueChange = { newName ->
-                                onUpdateUnits(units.toMutableList().also {
-                                    it[unitIndex] = unit.copy(name = newName)
-                                })
-                            },
+                            value = unitNameText,
+                            onValueChange = { unitNameText = it }, // local-only
                             label = { Text("Unit") },
                             singleLine = true,
-                            modifier = Modifier.weight(1f)
+                            modifier = Modifier
+                                .weight(1f)
+                                .onFocusChanged { state ->
+                                    if (!state.isFocused && unitNameText != unit.name) {
+                                        onUpdateUnits(units.toMutableList().also {
+                                            it[unitIndex] = unit.copy(name = unitNameText)
+                                        })
+                                    }
+                                }
                         )
+
                         TextButton(onClick = { expanded = !expanded }) {
                             Text(if (expanded) "▼" else "▶")
                         }
                     }
 
+                    // Actions unité
                     Row(
                         modifier = Modifier.fillMaxWidth(),
                         horizontalArrangement = Arrangement.Start,
@@ -256,6 +265,14 @@ fun ProfilesTab(units: List<UnitEntry>, onUpdateUnits: (List<UnitEntry>) -> Unit
                                         }
                                         list[unitIndex] = unit.copy(profiles = newProfiles)
                                     })
+                                },
+                                // pour commit-on-blur du nom du profil
+                                onCommitProfileName = { newName ->
+                                    onUpdateUnits(units.toMutableList().also { list ->
+                                        val newProfiles = unit.profiles.toMutableList()
+                                        newProfiles[pIndex] = profile.copy(name = newName)
+                                        list[unitIndex] = unit.copy(profiles = newProfiles)
+                                    })
                                 }
                             )
                         }
@@ -295,7 +312,8 @@ private fun TopLabeledCheckbox(
 private fun ProfileEditor(
     profile: AttackProfile,
     onChange: (AttackProfile) -> Unit,
-    onRemove: () -> Unit
+    onRemove: () -> Unit,
+    onCommitProfileName: (String) -> Unit
 ) {
     ElevatedCard(Modifier.fillMaxWidth()) {
         var expanded by rememberSaveable(profile.hashCode()) { mutableStateOf(true) }
@@ -303,6 +321,7 @@ private fun ProfileEditor(
             modifier = Modifier.fillMaxWidth().padding(12.dp),
             verticalArrangement = Arrangement.spacedBy(12.dp)
         ) {
+            // Header du profil
             Row(
                 verticalAlignment = Alignment.CenterVertically,
                 horizontalArrangement = Arrangement.spacedBy(12.dp),
@@ -312,13 +331,23 @@ private fun ProfileEditor(
                     checked = profile.active,
                     onCheckedChange = { ok -> onChange(profile.copy(active = ok)) }
                 )
+
+                // --- Profile name: commit on blur ---
+                var profileNameText by remember(profile.name) { mutableStateOf(profile.name) }
                 OutlinedTextField(
-                    value = profile.name,
-                    onValueChange = { newName -> onChange(profile.copy(name = newName)) },
+                    value = profileNameText,
+                    onValueChange = { profileNameText = it }, // local-only
                     label = { Text("Weapon Profile") },
                     singleLine = true,
-                    modifier = Modifier.weight(1f)
+                    modifier = Modifier
+                        .weight(1f)
+                        .onFocusChanged { state ->
+                            if (!state.isFocused && profileNameText != profile.name) {
+                                onCommitProfileName(profileNameText)
+                            }
+                        }
                 )
+
                 TextButton(
                     onClick = {
                         val next = if (profile.attackType == AttackType.MELEE) AttackType.SHOOT else AttackType.MELEE
@@ -332,6 +361,7 @@ private fun ProfileEditor(
                 }
             }
 
+            // Bouton suppression
             Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.Start) {
                 TextButton(onClick = onRemove) { Text("Delete Profile") }
             }
@@ -343,7 +373,7 @@ private fun ProfileEditor(
                     horizontalArrangement = Arrangement.SpaceBetween,
                     verticalAlignment = Alignment.Top
                 ) {
-                    // Colonne gauche : champs
+                    // Colonne gauche : champs (écriture immédiate)
                     Column(
                         verticalArrangement = Arrangement.spacedBy(10.dp),
                         modifier = Modifier.weight(1f)
@@ -360,7 +390,7 @@ private fun ProfileEditor(
                         }
                     }
 
-                    // Colonne droite : checkboxes, collée à droite (width fixe)
+                    // Colonne droite : checkboxes (écriture immédiate), collée à droite
                     Column(
                         verticalArrangement = Arrangement.spacedBy(12.dp),
                         horizontalAlignment = Alignment.End,
@@ -397,7 +427,7 @@ private fun ProfileEditor(
     }
 }
 
-// ===== Champs numériques =====
+// ===== Champs numériques (écriture immédiate) =====
 @Composable
 private fun NumberField(value: Int, onValue: (Int) -> Unit) {
     OutlinedTextField(
@@ -430,7 +460,7 @@ private fun GateField2to6(value: Int, onValue: (Int) -> Unit) {
     )
 }
 
-// ===== Target tab =====
+// ===== Target tab (inchangé) =====
 @Composable
 fun TargetTab(target: TargetConfig, onUpdate: (TargetConfig) -> Unit) {
     Column(
@@ -438,6 +468,7 @@ fun TargetTab(target: TargetConfig, onUpdate: (TargetConfig) -> Unit) {
         verticalArrangement = Arrangement.spacedBy(12.dp)
     ) {
         Text("Target buffs/debuffs", style = MaterialTheme.typography.titleMedium)
+
         Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
             Text("Ward")
             var wardTxt by remember(target.wardNeeded) {
@@ -458,6 +489,7 @@ fun TargetTab(target: TargetConfig, onUpdate: (TargetConfig) -> Unit) {
             )
             Text(text = if (target.wardNeeded in 2..6) "${target.wardNeeded}+" else "off")
         }
+
         Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
             Checkbox(
                 checked = target.debuffHitEnabled,
@@ -480,11 +512,12 @@ fun TargetTab(target: TargetConfig, onUpdate: (TargetConfig) -> Unit) {
             )
             if (target.debuffHitEnabled) Text("−${target.debuffHitValue} to Hit")
         }
+
         Divider()
     }
 }
 
-// ===== Simulation tab =====
+// ===== Simulation tab (inchangé) =====
 @Composable
 fun SimulationTab(units: List<UnitEntry>, target: TargetConfig) {
     val activeUnits = units.filter { it.active }.take(6)
@@ -493,14 +526,19 @@ fun SimulationTab(units: List<UnitEntry>, target: TargetConfig) {
         verticalArrangement = Arrangement.spacedBy(8.dp)
     ) {
         Text("Damage expectation by Save (per active unit, max 6)", style = MaterialTheme.typography.titleMedium)
+
         if (activeUnits.isEmpty()) {
-            Spacer(Modifier.height(8.dp)); Text("No active unit."); return@Column
+            Spacer(Modifier.height(8.dp))
+            Text("No active unit.")
+            return@Column
         }
+
         Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(12.dp)) {
             Text("Save", modifier = Modifier.width(70.dp))
             activeUnits.forEach { u -> Text(u.name, modifier = Modifier.weight(1f), maxLines = 1) }
         }
         Divider()
+
         val saves = listOf<Int?>(2, 3, 4, 5, 6, null)
         saves.forEach { save ->
             Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(12.dp)) {
@@ -547,7 +585,7 @@ private fun com.samohammer.app.model.AttackProfile.toUi(): AttackProfile =
         twoHits = twoHits,
         autoW = autoW,
         mortal = mortal,
-        aoa = aoa // persisté
+        aoa = aoa
     )
 
 private fun AttackProfile.toDomain(): com.samohammer.app.model.AttackProfile =
@@ -568,7 +606,7 @@ private fun AttackProfile.toDomain(): com.samohammer.app.model.AttackProfile =
         twoHits = twoHits,
         autoW = autoW,
         mortal = mortal,
-        aoa = aoa // persisté
+        aoa = aoa
     )
 
 private fun com.samohammer.app.model.UnitEntry.toUi(): UnitEntry =
