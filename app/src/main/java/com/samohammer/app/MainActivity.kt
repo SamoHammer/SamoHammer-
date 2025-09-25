@@ -1,11 +1,13 @@
-// V2.1.4 — Target tab refactor (1ère unité active)
-// - Colonne Target (par unité) :
-//   * Ward présenté comme un attribut numérique (0 = off, 2..6 = actif)
-//   * Case -1 Hit (toujours branchée à debuffHitEnabled/debuffHitValue)
-//   * Case -1 Wound (UI-only pour l’instant, non persistée)
+// V2.1.5 — Onglet Bonus (ex-Target) harmonisé
+// - Renomme l’onglet Target -> Bonus
+// - Harmonisation UI: labels au-dessus, tailles alignées aux profils
+// - Bloc Bonus pour la 1ʳᵉ unité active (extension à 6 viendra ensuite)
+// - Deux colonnes: Target + Attacker
+//   * Target: Ward (numérique), -1 Hit (persisté), -1 Wound (UI-only)
+//   * Attacker: +1 Wound (UI-only)
 // - Aucune nouvelle persistance ajoutée
-// - Conserve V2.1.3 : delete à droite, V2.1.2 : numeric UX (clear on focus, vide autorisé, persistance live),
-//   V2.1.1 : noms commit-on-blur, V2.1.0 : AoA persisté + moteur
+// - Conserve V2.1.4 et antérieures: AoA persisté + moteur, numeric UX (clear on focus, vide autorisé, persistance live, blur default),
+//   noms commit-on-blur, boutons Delete alignés à droite.
 
 package com.samohammer.app
 
@@ -40,7 +42,7 @@ class MainActivity : ComponentActivity() {
         setContent {
             SamoHammerTheme {
                 var selectedTab by remember { mutableStateOf(0) }
-                val tabs = listOf("Profils", "Target", "Simulations")
+                val tabs = listOf("Profils", "Bonus", "Simulations")
 
                 var units by remember { mutableStateOf(listOf(UnitEntry(name = "Unit 1"))) }
                 var target by remember { mutableStateOf(TargetConfig()) }
@@ -77,7 +79,7 @@ class MainActivity : ComponentActivity() {
                                 units = newUnits
                                 appStateVM.setUnits(newUnits.map { it.toDomain() })
                             }
-                            1 -> TargetTab(units, target) { t ->
+                            1 -> BonusTab(units, target) { t ->
                                 target = t
                                 appStateVM.updateTarget(t.toDomain())
                             }
@@ -175,7 +177,32 @@ private fun expectedDamageForUnit(u: UnitEntry, target: TargetConfig, baseSave: 
 private fun expectedDamageAll(units: List<UnitEntry>, target: TargetConfig, baseSave: Int?): Double =
     units.filter { it.active }.sumOf { expectedDamageForUnit(it, target, baseSave) }
 
-// ===== Profils (V2.1.3 stable) =====
+// ===== Composants partagés (labels au-dessus) =====
+@Composable
+private fun TopLabeled(label: String, content: @Composable () -> Unit) {
+    Column(horizontalAlignment = Alignment.Start) {
+        Text(label, style = MaterialTheme.typography.labelSmall)
+        content()
+    }
+}
+@Composable
+private fun TopLabeledCheckbox(
+    label: String,
+    checked: Boolean,
+    onCheckedChange: (Boolean) -> Unit,
+    modifier: Modifier = Modifier
+) {
+    Column(horizontalAlignment = Alignment.CenterHorizontally, modifier = modifier) {
+        Text(label, style = MaterialTheme.typography.labelSmall, maxLines = 1)
+        Checkbox(
+            checked = checked,
+            onCheckedChange = onCheckedChange,
+            modifier = Modifier.scale(0.9f)
+        )
+    }
+}
+
+// ===== Profils (stable: delete à droite, noms commit-on-blur, numeric UX) =====
 @Composable
 fun ProfilesTab(units: List<UnitEntry>, onUpdateUnits: (List<UnitEntry>) -> Unit) {
     LazyColumn(
@@ -204,7 +231,7 @@ fun ProfilesTab(units: List<UnitEntry>, onUpdateUnits: (List<UnitEntry>) -> Unit
                             }
                         )
 
-                        // Unit name: commit-on-blur (V2.1.1)
+                        // Unit name: commit-on-blur
                         var unitNameText by remember(unit.name) { mutableStateOf(unit.name) }
                         OutlinedTextField(
                             value = unitNameText,
@@ -291,31 +318,6 @@ fun ProfilesTab(units: List<UnitEntry>, onUpdateUnits: (List<UnitEntry>) -> Unit
 }
 
 @Composable
-private fun TopLabeled(label: String, content: @Composable () -> Unit) {
-    Column(horizontalAlignment = Alignment.Start) {
-        Text(label, style = MaterialTheme.typography.labelSmall)
-        content()
-    }
-}
-
-@Composable
-private fun TopLabeledCheckbox(
-    label: String,
-    checked: Boolean,
-    onCheckedChange: (Boolean) -> Unit,
-    modifier: Modifier = Modifier
-) {
-    Column(horizontalAlignment = Alignment.CenterHorizontally, modifier = modifier) {
-        Text(label, style = MaterialTheme.typography.labelSmall, maxLines = 1)
-        Checkbox(
-            checked = checked,
-            onCheckedChange = onCheckedChange,
-            modifier = Modifier.scale(0.9f)
-        )
-    }
-}
-
-@Composable
 private fun ProfileEditor(
     profile: AttackProfile,
     onChange: (AttackProfile) -> Unit,
@@ -339,7 +341,7 @@ private fun ProfileEditor(
                     onCheckedChange = { ok -> onChange(profile.copy(active = ok)) }
                 )
 
-                // Profile name: commit-on-blur (V2.1.1)
+                // Profile name: commit-on-blur
                 var profileNameText by remember(profile.name) { mutableStateOf(profile.name) }
                 OutlinedTextField(
                     value = profileNameText,
@@ -383,7 +385,7 @@ private fun ProfileEditor(
                     horizontalArrangement = Arrangement.SpaceBetween,
                     verticalAlignment = Alignment.Top
                 ) {
-                    // Colonne gauche : champs numériques (V2.1.2 UX)
+                    // Colonne gauche : champs numériques (numeric UX V2.1.2)
                     Column(
                         verticalArrangement = Arrangement.spacedBy(10.dp),
                         modifier = Modifier.weight(1f)
@@ -467,7 +469,7 @@ private fun ProfileEditor(
     }
 }
 
-// ===== Composants numériques (V2.1.2 UX) =====
+// ===== Composants numériques (numeric UX V2.1.2) =====
 @Composable
 private fun NumberField(
     label: String,
@@ -564,10 +566,10 @@ private fun GateField2to6(
     }
 }
 
-// ===== Target tab (V2.1.4) =====
+// ===== Onglet Bonus (ex-Target) =====
 @Composable
-fun TargetTab(units: List<UnitEntry>, target: TargetConfig, onUpdate: (TargetConfig) -> Unit) {
-    val activeUnits = units.filter { it.active }.take(1) // 1ère unité active pour l’instant
+fun BonusTab(units: List<UnitEntry>, target: TargetConfig, onUpdate: (TargetConfig) -> Unit) {
+    val activeUnits = units.filter { it.active }.take(1) // pour l’instant: 1ʳᵉ unité active
     if (activeUnits.isEmpty()) {
         Column(
             modifier = Modifier.fillMaxSize().padding(16.dp),
@@ -587,44 +589,45 @@ fun TargetTab(units: List<UnitEntry>, target: TargetConfig, onUpdate: (TargetCon
                     modifier = Modifier.fillMaxWidth().padding(16.dp),
                     verticalArrangement = Arrangement.spacedBy(12.dp)
                 ) {
-                    Text("Target Config — ${unit.name}", style = MaterialTheme.typography.titleMedium)
+                    Text("Bonus Config — ${unit.name}", style = MaterialTheme.typography.titleMedium)
 
-                    // Ici on ne crée que la colonne Target (Attacker viendra ensuite)
-                    Column(
-                        verticalArrangement = Arrangement.spacedBy(12.dp),
-                        modifier = Modifier.fillMaxWidth()
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.SpaceBetween,
+                        verticalAlignment = Alignment.Top
                     ) {
-                        // Ward: attribut numérique (0/off, 2..6 actif)
-                        Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                            Text("Ward")
-                            var wardTxt by remember(target.wardNeeded) {
-                                mutableStateOf(
-                                    when {
-                                        target.wardNeeded == 0 -> "0"
-                                        target.wardNeeded in 2..6 -> target.wardNeeded.toString()
-                                        else -> ""
-                                    }
+                        // Colonne Target (labels au-dessus)
+                        Column(
+                            verticalArrangement = Arrangement.spacedBy(12.dp),
+                            modifier = Modifier.weight(1f)
+                        ) {
+                            TopLabeled("Ward") {
+                                var wardTxt by remember(target.wardNeeded) {
+                                    mutableStateOf(
+                                        when {
+                                            target.wardNeeded == 0 -> "0"
+                                            target.wardNeeded in 2..6 -> target.wardNeeded.toString()
+                                            else -> ""
+                                        }
+                                    )
+                                }
+                                OutlinedTextField(
+                                    value = wardTxt,
+                                    onValueChange = { newText ->
+                                        val digits = newText.filter { it.isDigit() }.take(1)
+                                        wardTxt = if (digits.isEmpty()) "" else digits
+                                        val v = digits.toIntOrNull()
+                                        onUpdate(target.copy(wardNeeded = v ?: 0))
+                                    },
+                                    placeholder = { Text("0 or 2..6") },
+                                    keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
+                                    singleLine = true,
+                                    modifier = Modifier.width(80.dp).height(50.dp)
                                 )
                             }
-                            OutlinedTextField(
-                                value = wardTxt,
-                                onValueChange = { newText ->
-                                    val digits = newText.filter { it.isDigit() }.take(1)
-                                    wardTxt = if (digits.isEmpty()) "" else digits
-                                    val v = digits.toIntOrNull()
-                                    onUpdate(target.copy(wardNeeded = v ?: 0))
-                                },
-                                placeholder = { Text("0 or 2..6") },
-                                keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
-                                singleLine = true,
-                                modifier = Modifier.width(80.dp).height(50.dp)
-                            )
-                            Text(text = if (target.wardNeeded in 2..6) "${target.wardNeeded}+" else "off")
-                        }
 
-                        // -1 Hit (persisté comme avant)
-                        Row(verticalAlignment = Alignment.CenterVertically) {
-                            Checkbox(
+                            TopLabeledCheckbox(
+                                label = "-1 Hit",
                                 checked = target.debuffHitEnabled,
                                 onCheckedChange = { enabled ->
                                     onUpdate(
@@ -635,17 +638,27 @@ fun TargetTab(units: List<UnitEntry>, target: TargetConfig, onUpdate: (TargetCon
                                     )
                                 }
                             )
-                            Text("-1 Hit")
+
+                            var debuffWound by remember { mutableStateOf(false) }
+                            TopLabeledCheckbox(
+                                label = "-1 Wound",
+                                checked = debuffWound,
+                                onCheckedChange = { debuffWound = it }
+                            )
                         }
 
-                        // -1 Wound (UI-only pour l’instant)
-                        var debuffWound by remember { mutableStateOf(false) }
-                        Row(verticalAlignment = Alignment.CenterVertically) {
-                            Checkbox(
-                                checked = debuffWound,
-                                onCheckedChange = { checked -> debuffWound = checked }
+                        // Colonne Attacker (labels au-dessus)
+                        Column(
+                            verticalArrangement = Arrangement.spacedBy(12.dp),
+                            horizontalAlignment = Alignment.End,
+                            modifier = Modifier.weight(1f)
+                        ) {
+                            var buffWound by remember { mutableStateOf(false) }
+                            TopLabeledCheckbox(
+                                label = "+1 Wound",
+                                checked = buffWound,
+                                onCheckedChange = { buffWound = it }
                             )
-                            Text("-1 Wound (UI only)")
                         }
                     }
                 }
@@ -654,7 +667,7 @@ fun TargetTab(units: List<UnitEntry>, target: TargetConfig, onUpdate: (TargetCon
     }
 }
 
-// ===== Simulation tab (inchangé V2.1.3) =====
+// ===== Simulation tab =====
 @Composable
 fun SimulationTab(units: List<UnitEntry>, target: TargetConfig) {
     val activeUnits = units.filter { it.active }.take(6)
