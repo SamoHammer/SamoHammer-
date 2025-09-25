@@ -1,9 +1,13 @@
-// V2.1.6 — Bonus tab harmonisé (Attacker à gauche, Target à droite)
-// - Colonne gauche (Attacker): titre = nom de l’unité, checkbox "+1 Wound" (UI-only)
-// - Colonne droite (Target): Ward (champ 64.dp de large), -1 Hit (persisté), -1 Wound (UI-only)
-// - Labels au-dessus, colonnes de taille égale (weight(1f))
-// - Aucune nouvelle persistance
-// - Conserve V2.1.5 et antérieures: AoA persisté + moteur, numeric UX, noms commit-on-blur, delete à droite
+// V2.1.5 — Onglet Bonus (ex-Target) harmonisé
+// - Renomme l’onglet Target -> Bonus
+// - Harmonisation UI: labels au-dessus, tailles alignées aux profils
+// - Bloc Bonus pour la 1ʳᵉ unité active (extension à 6 viendra ensuite)
+// - Deux colonnes: Target + Attacker
+//   * Target: Ward (numérique), -1 Hit (persisté), -1 Wound (UI-only)
+//   * Attacker: +1 Wound (UI-only)
+// - Aucune nouvelle persistance ajoutée
+// - Conserve V2.1.4 et antérieures: AoA persisté + moteur, numeric UX (clear on focus, vide autorisé, persistance live, blur default),
+//   noms commit-on-blur, boutons Delete alignés à droite.
 
 package com.samohammer.app
 
@@ -104,7 +108,7 @@ data class AttackProfile(
     val twoHits: Boolean = false,
     val autoW: Boolean = false,
     val mortal: Boolean = false,
-    val aoa: Boolean = false
+    val aoa: Boolean = false // persisté via mapping
 )
 
 data class UnitEntry(
@@ -128,7 +132,7 @@ private fun pGate(needed: Int): Double = when {
 }
 private fun effectiveHitThreshold(baseNeeded: Int, debuff: Int, aoa: Boolean): Int {
     val buff = if (aoa) -1 else 0
-    return clamp2to6(baseNeeded + debuff + buff)
+    return clamp2to6(baseNeeded + debuff + buff) // min 2+, max 6+
 }
 private fun pHitNonSix(effNeeded: Int): Double {
     val successes = (6 - effNeeded).coerceAtLeast(0)
@@ -149,13 +153,16 @@ private fun expectedDamageForProfile(p: AttackProfile, target: TargetConfig, bas
     if (!p.active) return 0.0
     val attacks = max(p.models, 0) * max(p.attacks, 0)
     if (attacks == 0) return 0.0
+
     val debuff = if (target.debuffHitEnabled) target.debuffHitValue else 0
     val effHit = effectiveHitThreshold(p.toHit, debuff, p.aoa)
+
     val p6 = 1.0 / 6.0
     val phNon6 = pHitNonSix(effHit)
     val pw = pWound(p.toWound)
     val pu = pUnsaved(baseSave, p.rend)
     val ward = wardFactor(target.wardNeeded)
+
     val evNon6 = phNon6 * pw * pu * p.damage
     val mult6 = if (p.twoHits) 2.0 else 1.0
     val pw6 = if (p.mortal || p.autoW) 1.0 else pw
@@ -170,7 +177,7 @@ private fun expectedDamageForUnit(u: UnitEntry, target: TargetConfig, baseSave: 
 private fun expectedDamageAll(units: List<UnitEntry>, target: TargetConfig, baseSave: Int?): Double =
     units.filter { it.active }.sumOf { expectedDamageForUnit(it, target, baseSave) }
 
-// ===== Composants partagés =====
+// ===== Composants partagés (labels au-dessus) =====
 @Composable
 private fun TopLabeled(label: String, content: @Composable () -> Unit) {
     Column(horizontalAlignment = Alignment.Start) {
@@ -195,112 +202,7 @@ private fun TopLabeledCheckbox(
     }
 }
 
-// ===== Onglet Bonus =====
-@Composable
-fun BonusTab(units: List<UnitEntry>, target: TargetConfig, onUpdate: (TargetConfig) -> Unit) {
-    val activeUnits = units.filter { it.active }.take(1)
-    if (activeUnits.isEmpty()) {
-        Column(
-            modifier = Modifier.fillMaxSize().padding(16.dp),
-            verticalArrangement = Arrangement.Center,
-            horizontalAlignment = Alignment.CenterHorizontally
-        ) { Text("No active unit.") }
-        return
-    }
-
-    LazyColumn(
-        modifier = Modifier.fillMaxSize().padding(16.dp),
-        verticalArrangement = Arrangement.spacedBy(16.dp)
-    ) {
-        itemsIndexed(activeUnits) { _, unit ->
-            ElevatedCard(Modifier.fillMaxWidth()) {
-                Column(
-                    modifier = Modifier.fillMaxWidth().padding(16.dp),
-                    verticalArrangement = Arrangement.spacedBy(12.dp)
-                ) {
-                    Text("Bonus Config — ${unit.name}", style = MaterialTheme.typography.titleMedium)
-
-                    Row(
-                        modifier = Modifier.fillMaxWidth(),
-                        horizontalArrangement = Arrangement.SpaceBetween,
-                        verticalAlignment = Alignment.Top
-                    ) {
-                        // ---- Colonne Attacker (à gauche)
-                        Column(
-                            verticalArrangement = Arrangement.spacedBy(12.dp),
-                            modifier = Modifier.weight(1f)
-                        ) {
-                            // Nom de l’attaquant au-dessus du bloc
-                            Text(unit.name, style = MaterialTheme.typography.titleSmall)
-                            var buffWound by remember { mutableStateOf(false) }
-                            TopLabeledCheckbox(
-                                label = "+1 Wound",
-                                checked = buffWound,
-                                onCheckedChange = { buffWound = it }
-                            )
-                        }
-
-                        // ---- Colonne Target (à droite)
-                        Column(
-                            verticalArrangement = Arrangement.spacedBy(12.dp),
-                            horizontalAlignment = Alignment.End,
-                            modifier = Modifier.weight(1f)
-                        ) {
-                            TopLabeled("Ward") {
-                                var wardTxt by remember(target.wardNeeded) {
-                                    mutableStateOf(
-                                        when {
-                                            target.wardNeeded == 0 -> "0"
-                                            target.wardNeeded in 2..6 -> target.wardNeeded.toString()
-                                            else -> ""
-                                        }
-                                    )
-                                }
-                                OutlinedTextField(
-                                    value = wardTxt,
-                                    onValueChange = { newText ->
-                                        val digits = newText.filter { it.isDigit() }.take(1)
-                                        wardTxt = if (digits.isEmpty()) "" else digits
-                                        val v = digits.toIntOrNull()
-                                        onUpdate(target.copy(wardNeeded = v ?: 0))
-                                    },
-                                    placeholder = { Text("0 or 2..6") },
-                                    keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
-                                    singleLine = true,
-                                    modifier = Modifier
-                                        .width(64.dp)   // plus compact que 80.dp
-                                        .height(50.dp)
-                                )
-                            }
-
-                            TopLabeledCheckbox(
-                                label = "-1 Hit",
-                                checked = target.debuffHitEnabled,
-                                onCheckedChange = { enabled ->
-                                    onUpdate(
-                                        target.copy(
-                                            debuffHitEnabled = enabled,
-                                            debuffHitValue = if (enabled) target.debuffHitValue else 0
-                                        )
-                                    )
-                                }
-                            )
-
-                            var debuffWound by remember { mutableStateOf(false) }
-                            TopLabeledCheckbox(
-                                label = "-1 Wound",
-                                checked = debuffWound,
-                                onCheckedChange = { debuffWound = it }
-                            )
-                        }
-                    }
-                }
-            }
-        }
-    }
-}
-
-// ===== Profils (stable) =====
+// ===== Profils (stable: delete à droite, noms commit-on-blur, numeric UX) =====
 @Composable
 fun ProfilesTab(units: List<UnitEntry>, onUpdateUnits: (List<UnitEntry>) -> Unit) {
     LazyColumn(
@@ -314,6 +216,7 @@ fun ProfilesTab(units: List<UnitEntry>, onUpdateUnits: (List<UnitEntry>) -> Unit
                     modifier = Modifier.fillMaxWidth().padding(12.dp),
                     verticalArrangement = Arrangement.spacedBy(12.dp)
                 ) {
+                    // Header unité
                     Row(
                         verticalAlignment = Alignment.CenterVertically,
                         horizontalArrangement = Arrangement.spacedBy(12.dp),
@@ -327,10 +230,12 @@ fun ProfilesTab(units: List<UnitEntry>, onUpdateUnits: (List<UnitEntry>) -> Unit
                                 })
                             }
                         )
+
+                        // Unit name: commit-on-blur
                         var unitNameText by remember(unit.name) { mutableStateOf(unit.name) }
                         OutlinedTextField(
                             value = unitNameText,
-                            onValueChange = { unitNameText = it },
+                            onValueChange = { unitNameText = it }, // local-only
                             label = { Text("Unit") },
                             singleLine = true,
                             modifier = Modifier
@@ -343,11 +248,13 @@ fun ProfilesTab(units: List<UnitEntry>, onUpdateUnits: (List<UnitEntry>) -> Unit
                                     }
                                 }
                         )
-                        TextButton(onClick = { /* expand/collapse */ }) {
-                            Text("▼")
+
+                        TextButton(onClick = { expanded = !expanded }) {
+                            Text(if (expanded) "▼" else "▶")
                         }
                     }
 
+                    // Actions unité: Add à gauche, Delete totalement à droite
                     Row(
                         modifier = Modifier.fillMaxWidth(),
                         verticalAlignment = Alignment.CenterVertically,
@@ -374,33 +281,35 @@ fun ProfilesTab(units: List<UnitEntry>, onUpdateUnits: (List<UnitEntry>) -> Unit
                         }
                     }
 
-                    unit.profiles.forEachIndexed { pIndex, profile ->
-                        ProfileEditor(
-                            profile = profile,
-                            onChange = { updated ->
-                                onUpdateUnits(units.toMutableList().also { list ->
-                                    val newProfiles = unit.profiles.toMutableList().also {
-                                        it[pIndex] = updated
-                                    }
-                                    list[unitIndex] = unit.copy(profiles = newProfiles)
-                                })
-                            },
-                            onRemove = {
-                                onUpdateUnits(units.toMutableList().also { list ->
-                                    val newProfiles = unit.profiles.toMutableList().also {
-                                        if (it.size > 1) it.removeAt(pIndex)
-                                    }
-                                    list[unitIndex] = unit.copy(profiles = newProfiles)
-                                })
-                            },
-                            onCommitProfileName = { newName ->
-                                onUpdateUnits(units.toMutableList().also { list ->
-                                    val newProfiles = unit.profiles.toMutableList()
-                                    newProfiles[pIndex] = profile.copy(name = newName)
-                                    list[unitIndex] = unit.copy(profiles = newProfiles)
-                                })
-                            }
-                        )
+                    if (expanded) {
+                        unit.profiles.forEachIndexed { pIndex, profile ->
+                            ProfileEditor(
+                                profile = profile,
+                                onChange = { updated ->
+                                    onUpdateUnits(units.toMutableList().also { list ->
+                                        val newProfiles = unit.profiles.toMutableList().also {
+                                            it[pIndex] = updated
+                                        }
+                                        list[unitIndex] = unit.copy(profiles = newProfiles)
+                                    })
+                                },
+                                onRemove = {
+                                    onUpdateUnits(units.toMutableList().also { list ->
+                                        val newProfiles = unit.profiles.toMutableList().also {
+                                            if (it.size > 1) it.removeAt(pIndex)
+                                        }
+                                        list[unitIndex] = unit.copy(profiles = newProfiles)
+                                    })
+                                },
+                                onCommitProfileName = { newName ->
+                                    onUpdateUnits(units.toMutableList().also { list ->
+                                        val newProfiles = unit.profiles.toMutableList()
+                                        newProfiles[pIndex] = profile.copy(name = newName)
+                                        list[unitIndex] = unit.copy(profiles = newProfiles)
+                                    })
+                                }
+                            )
+                        }
                     }
                 }
             }
@@ -421,6 +330,7 @@ private fun ProfileEditor(
             modifier = Modifier.fillMaxWidth().padding(12.dp),
             verticalArrangement = Arrangement.spacedBy(12.dp)
         ) {
+            // Header profil
             Row(
                 verticalAlignment = Alignment.CenterVertically,
                 horizontalArrangement = Arrangement.spacedBy(12.dp),
@@ -430,10 +340,12 @@ private fun ProfileEditor(
                     checked = profile.active,
                     onCheckedChange = { ok -> onChange(profile.copy(active = ok)) }
                 )
+
+                // Profile name: commit-on-blur
                 var profileNameText by remember(profile.name) { mutableStateOf(profile.name) }
                 OutlinedTextField(
                     value = profileNameText,
-                    onValueChange = { profileNameText = it },
+                    onValueChange = { profileNameText = it }, // local-only
                     label = { Text("Weapon Profile") },
                     singleLine = true,
                     modifier = Modifier
@@ -444,52 +356,112 @@ private fun ProfileEditor(
                             }
                         }
                 )
+
                 TextButton(
                     onClick = {
                         val next = if (profile.attackType == AttackType.MELEE) AttackType.SHOOT else AttackType.MELEE
                         onChange(profile.copy(attackType = next))
                     }
-                ) { Text(if (profile.attackType == AttackType.MELEE) "Melee" else "Shoot") }
-                TextButton(onClick = { /* expand/collapse */ }) { Text("▼") }
+                ) {
+                    Text(if (profile.attackType == AttackType.MELEE) "Melee" else "Shoot")
+                }
+                TextButton(onClick = { expanded = !expanded }) {
+                    Text(if (expanded) "▼" else "▶")
+                }
             }
 
+            // Delete Profile totalement à droite
             Row(
                 modifier = Modifier.fillMaxWidth(),
                 horizontalArrangement = Arrangement.End
-            ) { TextButton(onClick = onRemove) { Text("Delete Profile") } }
-
-            Row(
-                modifier = Modifier.fillMaxWidth(),
-                horizontalArrangement = Arrangement.SpaceBetween,
-                verticalAlignment = Alignment.Top
             ) {
-                Column(
-                    verticalArrangement = Arrangement.spacedBy(10.dp),
-                    modifier = Modifier.weight(1f)
+                TextButton(onClick = onRemove) { Text("Delete Profile") }
+            }
+
+            if (expanded) {
+                // SpaceBetween : pousse la colonne de droite au bord
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.SpaceBetween,
+                    verticalAlignment = Alignment.Top
                 ) {
-                    Row(horizontalArrangement = Arrangement.spacedBy(12.dp), modifier = Modifier.fillMaxWidth()) {
-                        NumberField("Size", profile.models, 0) { v -> onChange(profile.copy(models = v)) }
-                        NumberField("Atk", profile.attacks, 0) { v -> onChange(profile.copy(attacks = v)) }
-                        GateField2to6("Hit", profile.toHit, 4) { v -> onChange(profile.copy(toHit = v)) }
+                    // Colonne gauche : champs numériques (numeric UX V2.1.2)
+                    Column(
+                        verticalArrangement = Arrangement.spacedBy(10.dp),
+                        modifier = Modifier.weight(1f)
+                    ) {
+                        Row(horizontalArrangement = Arrangement.spacedBy(12.dp), modifier = Modifier.fillMaxWidth()) {
+                            NumberField(
+                                label = "Size",
+                                value = profile.models,
+                                defaultOnBlur = 0,
+                                onValue = { v -> onChange(profile.copy(models = v)) }
+                            )
+                            NumberField(
+                                label = "Atk",
+                                value = profile.attacks,
+                                defaultOnBlur = 0,
+                                onValue = { v -> onChange(profile.copy(attacks = v)) }
+                            )
+                            GateField2to6(
+                                label = "Hit",
+                                value = profile.toHit,
+                                defaultOnBlur = 4,
+                                onValue = { v -> onChange(profile.copy(toHit = v)) }
+                            )
+                        }
+                        Row(horizontalArrangement = Arrangement.spacedBy(12.dp), modifier = Modifier.fillMaxWidth()) {
+                            GateField2to6(
+                                label = "Wnd",
+                                value = profile.toWound,
+                                defaultOnBlur = 4,
+                                onValue = { v -> onChange(profile.copy(toWound = v)) }
+                            )
+                            NumberField(
+                                label = "Rend",
+                                value = profile.rend,
+                                defaultOnBlur = 0,
+                                onValue = { v -> onChange(profile.copy(rend = v)) }
+                            )
+                            NumberField(
+                                label = "Dmg",
+                                value = profile.damage,
+                                defaultOnBlur = 0,
+                                onValue = { v -> onChange(profile.copy(damage = v)) }
+                            )
+                        }
                     }
-                    Row(horizontalArrangement = Arrangement.spacedBy(12.dp), modifier = Modifier.fillMaxWidth()) {
-                        GateField2to6("Wnd", profile.toWound, 4) { v -> onChange(profile.copy(toWound = v)) }
-                        NumberField("Rend", profile.rend, 0) { v -> onChange(profile.copy(rend = v)) }
-                        NumberField("Dmg", profile.damage, 0) { v -> onChange(profile.copy(damage = v)) }
-                    }
-                }
-                Column(
-                    verticalArrangement = Arrangement.spacedBy(12.dp),
-                    horizontalAlignment = Alignment.End,
-                    modifier = Modifier.width(110.dp)
-                ) {
-                    Row(horizontalArrangement = Arrangement.spacedBy(8.dp), modifier = Modifier.fillMaxWidth()) {
-                        TopLabeledCheckbox("2Hits", profile.twoHits) { onChange(profile.copy(twoHits = it)) }
-                        TopLabeledCheckbox("AutoW", profile.autoW) { onChange(profile.copy(autoW = it)) }
-                    }
-                    Row(horizontalArrangement = Arrangement.spacedBy(8.dp), modifier = Modifier.fillMaxWidth()) {
-                        TopLabeledCheckbox("Mortal", profile.mortal) { onChange(profile.copy(mortal = it)) }
-                        TopLabeledCheckbox("AoA", profile.aoa) { onChange(profile.copy(aoa = it)) }
+
+                    // Colonne droite : checkboxes (persist immédiat)
+                    Column(
+                        verticalArrangement = Arrangement.spacedBy(12.dp),
+                        horizontalAlignment = Alignment.End,
+                        modifier = Modifier.width(110.dp)
+                    ) {
+                        Row(horizontalArrangement = Arrangement.spacedBy(8.dp), modifier = Modifier.fillMaxWidth()) {
+                            TopLabeledCheckbox(
+                                label = "2Hits",
+                                checked = profile.twoHits,
+                                onCheckedChange = { checked -> onChange(profile.copy(twoHits = checked)) }
+                            )
+                            TopLabeledCheckbox(
+                                label = "AutoW",
+                                checked = profile.autoW,
+                                onCheckedChange = { checked -> onChange(profile.copy(autoW = checked)) }
+                            )
+                        }
+                        Row(horizontalArrangement = Arrangement.spacedBy(8.dp), modifier = Modifier.fillMaxWidth()) {
+                            TopLabeledCheckbox(
+                                label = "Mortal",
+                                checked = profile.mortal,
+                                onCheckedChange = { checked -> onChange(profile.copy(mortal = checked)) }
+                            )
+                            TopLabeledCheckbox(
+                                label = "AoA",
+                                checked = profile.aoa,
+                                onCheckedChange = { checked -> onChange(profile.copy(aoa = checked)) }
+                            )
+                        }
                     }
                 }
             }
@@ -497,7 +469,7 @@ private fun ProfileEditor(
     }
 }
 
-// ===== Composants numériques =====
+// ===== Composants numériques (numeric UX V2.1.2) =====
 @Composable
 private fun NumberField(
     label: String,
@@ -514,9 +486,12 @@ private fun NumberField(
             value = text,
             onValueChange = { newText ->
                 val digits = newText.filter { it.isDigit() }
-                if (digits.isEmpty()) text = "" else {
+                if (digits.isEmpty()) {
+                    text = ""
+                } else {
                     text = digits
-                    digits.toIntOrNull()?.let { onValue(it) }
+                    val v = digits.toIntOrNull()
+                    if (v != null) onValue(v) // persistance live si valide
                 }
             },
             singleLine = true,
@@ -525,12 +500,13 @@ private fun NumberField(
                 .size(width = 58.dp, height = 50.dp)
                 .onFocusChanged { st ->
                     if (st.isFocused && !hadFocus) {
-                        hadFocus = true; text = ""
+                        hadFocus = true
+                        text = "" // clear on focus
                     } else if (!st.isFocused) {
                         hadFocus = false
                         if (text.isEmpty()) {
                             text = defaultOnBlur.toString()
-                            onValue(defaultOnBlur)
+                            onValue(defaultOnBlur) // blur default
                         }
                     }
                 }
@@ -559,7 +535,8 @@ private fun GateField2to6(
                 } else {
                     val d1 = digits.take(1)
                     text = d1
-                    d1.toIntOrNull()?.let { if (it in 2..6) onValue(it) }
+                    val v = d1.toIntOrNull()
+                    if (v != null && v in 2..6) onValue(v) // persistance live si valide
                 }
             },
             placeholder = { Text("2..6") },
@@ -569,17 +546,124 @@ private fun GateField2to6(
                 .size(width = 58.dp, height = 50.dp)
                 .onFocusChanged { st ->
                     if (st.isFocused && !hadFocus) {
-                        hadFocus = true; text = ""
+                        hadFocus = true
+                        text = "" // clear on focus
                     } else if (!st.isFocused) {
                         hadFocus = false
-                        val v = text.toIntOrNull()
-                        if (text.isEmpty() || v !in 2..6) {
+                        if (text.isEmpty()) {
                             text = defaultOnBlur.toString()
                             onValue(defaultOnBlur)
+                        } else {
+                            val v = text.toIntOrNull()
+                            if (v == null || v !in 2..6) {
+                                text = defaultOnBlur.toString()
+                                onValue(defaultOnBlur)
+                            }
                         }
                     }
                 }
         )
+    }
+}
+
+// ===== Onglet Bonus (ex-Target) =====
+@Composable
+fun BonusTab(units: List<UnitEntry>, target: TargetConfig, onUpdate: (TargetConfig) -> Unit) {
+    val activeUnits = units.filter { it.active }.take(1) // pour l’instant: 1ʳᵉ unité active
+    if (activeUnits.isEmpty()) {
+        Column(
+            modifier = Modifier.fillMaxSize().padding(16.dp),
+            verticalArrangement = Arrangement.Center,
+            horizontalAlignment = Alignment.CenterHorizontally
+        ) { Text("No active unit.") }
+        return
+    }
+
+    LazyColumn(
+        modifier = Modifier.fillMaxSize().padding(16.dp),
+        verticalArrangement = Arrangement.spacedBy(16.dp)
+    ) {
+        itemsIndexed(activeUnits) { _, unit ->
+            ElevatedCard(Modifier.fillMaxWidth()) {
+                Column(
+                    modifier = Modifier.fillMaxWidth().padding(16.dp),
+                    verticalArrangement = Arrangement.spacedBy(12.dp)
+                ) {
+                    Text("Bonus Config — ${unit.name}", style = MaterialTheme.typography.titleMedium)
+
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.SpaceBetween,
+                        verticalAlignment = Alignment.Top
+                    ) {
+                        // Colonne Target (labels au-dessus)
+                        Column(
+                            verticalArrangement = Arrangement.spacedBy(12.dp),
+                            modifier = Modifier.weight(1f)
+                        ) {
+                            TopLabeled("Ward") {
+                                var wardTxt by remember(target.wardNeeded) {
+                                    mutableStateOf(
+                                        when {
+                                            target.wardNeeded == 0 -> "0"
+                                            target.wardNeeded in 2..6 -> target.wardNeeded.toString()
+                                            else -> ""
+                                        }
+                                    )
+                                }
+                                OutlinedTextField(
+                                    value = wardTxt,
+                                    onValueChange = { newText ->
+                                        val digits = newText.filter { it.isDigit() }.take(1)
+                                        wardTxt = if (digits.isEmpty()) "" else digits
+                                        val v = digits.toIntOrNull()
+                                        onUpdate(target.copy(wardNeeded = v ?: 0))
+                                    },
+                                    placeholder = { Text("0 or 2..6") },
+                                    keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
+                                    singleLine = true,
+                                    modifier = Modifier.width(80.dp).height(50.dp)
+                                )
+                            }
+
+                            TopLabeledCheckbox(
+                                label = "-1 Hit",
+                                checked = target.debuffHitEnabled,
+                                onCheckedChange = { enabled ->
+                                    onUpdate(
+                                        target.copy(
+                                            debuffHitEnabled = enabled,
+                                            debuffHitValue = if (enabled) target.debuffHitValue else 0
+                                        )
+                                    )
+                                }
+                            )
+
+                            var debuffWound by remember { mutableStateOf(false) }
+                            TopLabeledCheckbox(
+                                label = "-1 Wound",
+                                checked = debuffWound,
+                                onCheckedChange = { debuffWound = it }
+                            )
+                        }
+
+                        // Colonne Attacker (labels au-dessus)
+                        Column(
+                            verticalArrangement = Arrangement.spacedBy(12.dp),
+                            horizontalAlignment = Alignment.End,
+                            modifier = Modifier.weight(1f)
+                        ) {
+                            var buffWound by remember { mutableStateOf(false) }
+                            TopLabeledCheckbox(
+                                label = "+1 Wound",
+                                checked = buffWound,
+                                onCheckedChange = { buffWound = it }
+                            )
+                        }
+                    }
+                }
+            }
+        }
     }
 }
 
