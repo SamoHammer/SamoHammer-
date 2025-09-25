@@ -1,8 +1,9 @@
-// V2.1.6 — Bonus inversé & Ward compact
-// - Attacker à gauche (nom au-dessus, +1 Wound UI-only)
-// - Target à droite (Ward 64.dp, -1 Hit persisté, -1 Wound UI-only)
-// - Conserve V2.1.5 : AoA persisté + moteur, numeric UX (clear on focus, vide autorisé,
-//   persistance live, blur default), noms commit-on-blur, Delete à droite, Simulation.
+// V2.1.7 — UI polish (Profils & Bonus)
+// - Profils: élargit le champ "Weapon Profile", décale Melee/Shoot + chevron.
+// - Profils: champs numériques centrés visuellement (label au-dessus, case centrée dans son carré).
+// - Bonus: titre devient "Conditionnal Bonus — <UnitName>" + libellé "Target" aligné à droite du titre.
+// - Bonus: Ward plus compact (56.dp) et centré visuellement (label au-dessus, case centrée).
+// - Aucun changement moteur/persistance. Base: V2.1.6.
 
 package com.samohammer.app
 
@@ -215,7 +216,7 @@ private fun TopLabeledCheckbox(
 }
 
 /* =========================
-   Onglet Bonus (ex-Target) — V2.1.6
+   Onglet Bonus (ex-Target) — V2.1.7
    ========================= */
 @Composable
 fun BonusTab(units: List<UnitEntry>, target: TargetConfig, onUpdate: (TargetConfig) -> Unit) {
@@ -239,7 +240,19 @@ fun BonusTab(units: List<UnitEntry>, target: TargetConfig, onUpdate: (TargetConf
                     modifier = Modifier.fillMaxWidth().padding(16.dp),
                     verticalArrangement = Arrangement.spacedBy(12.dp)
                 ) {
-                    Text("Bonus Config — ${unit.name}", style = MaterialTheme.typography.titleMedium)
+
+                    // Titre + "Target" à droite
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Text(
+                            "Conditionnal Bonus — ${unit.name}",
+                            style = MaterialTheme.typography.titleMedium,
+                            modifier = Modifier.weight(1f)
+                        )
+                        Text("Target", style = MaterialTheme.typography.titleMedium)
+                    }
 
                     Row(
                         modifier = Modifier.fillMaxWidth(),
@@ -266,7 +279,9 @@ fun BonusTab(units: List<UnitEntry>, target: TargetConfig, onUpdate: (TargetConf
                             horizontalAlignment = Alignment.End,
                             modifier = Modifier.weight(1f)
                         ) {
-                            TopLabeled("Ward") {
+                            // Ward : label au-dessus, champ compact + centré visuellement
+                            Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                                Text("Ward", style = MaterialTheme.typography.labelSmall)
                                 var wardTxt by remember(target.wardNeeded) {
                                     mutableStateOf(
                                         when {
@@ -286,7 +301,9 @@ fun BonusTab(units: List<UnitEntry>, target: TargetConfig, onUpdate: (TargetConf
                                     placeholder = { Text("0 or 2..6") },
                                     keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
                                     singleLine = true,
-                                    modifier = Modifier.width(64.dp).height(50.dp) // compact V2.1.6
+                                    modifier = Modifier
+                                        .width(56.dp) // compacté vs 64dp
+                                        .height(50.dp)
                                 )
                             }
 
@@ -318,7 +335,7 @@ fun BonusTab(units: List<UnitEntry>, target: TargetConfig, onUpdate: (TargetConf
 }
 
 /* =========================
-   Profils (stable V2.1.x)
+   Profils (UI polish V2.1.7)
    ========================= */
 @Composable
 fun ProfilesTab(units: List<UnitEntry>, onUpdateUnits: (List<UnitEntry>) -> Unit) {
@@ -365,6 +382,16 @@ fun ProfilesTab(units: List<UnitEntry>, onUpdateUnits: (List<UnitEntry>) -> Unit
                                     }
                                 }
                         )
+
+                        // On décale le bouton Melee/Shoot et le chevron vers la droite
+                        Spacer(Modifier.width(6.dp))
+
+                        TextButton(onClick = {
+                            // handled in ProfileEditor, ici on ne bascule pas
+                        }) {
+                            // Placeholder statique ici (le vrai toggle est par profil)
+                            Text("Type")
+                        }
 
                         TextButton(onClick = { expanded = !expanded }) {
                             Text(if (expanded) "▼" else "▶")
@@ -458,7 +485,7 @@ private fun ProfileEditor(
                     onCheckedChange = { ok -> onChange(profile.copy(active = ok)) }
                 )
 
-                // Profile name: commit-on-blur
+                // Profile name: commit-on-blur — élargi visuellement
                 var profileNameText by remember(profile.name) { mutableStateOf(profile.name) }
                 OutlinedTextField(
                     value = profileNameText,
@@ -466,7 +493,7 @@ private fun ProfileEditor(
                     label = { Text("Weapon Profile") },
                     singleLine = true,
                     modifier = Modifier
-                        .weight(1f)
+                        .weight(1.2f) // <— un peu plus large qu'avant (1f)
                         .onFocusChanged { state ->
                             if (!state.isFocused && profileNameText != profile.name) {
                                 onCommitProfileName(profileNameText)
@@ -502,45 +529,45 @@ private fun ProfileEditor(
                     horizontalArrangement = Arrangement.SpaceBetween,
                     verticalAlignment = Alignment.Top
                 ) {
-                    // Colonne gauche : champs numériques (numeric UX V2.1.2)
+                    // Colonne gauche : champs numériques (labels au-dessus, case centrée visuellement)
                     Column(
                         verticalArrangement = Arrangement.spacedBy(10.dp),
                         modifier = Modifier.weight(1f)
                     ) {
-                        Row(horizontalArrangement = Arrangement.spacedBy(12.dp), modifier = Modifier.fillMaxWidth()) {
-                            NumberField(
+                        Row(horizontalArrangement = Arrangement.SpaceEvenly, modifier = Modifier.fillMaxWidth()) {
+                            NumberFieldCentered(
                                 label = "Size",
                                 value = profile.models,
                                 defaultOnBlur = 0,
                                 onValue = { v -> onChange(profile.copy(models = v)) }
                             )
-                            NumberField(
+                            NumberFieldCentered(
                                 label = "Atk",
                                 value = profile.attacks,
                                 defaultOnBlur = 0,
                                 onValue = { v -> onChange(profile.copy(attacks = v)) }
                             )
-                            GateField2to6(
+                            GateField2to6Centered(
                                 label = "Hit",
                                 value = profile.toHit,
                                 defaultOnBlur = 4,
                                 onValue = { v -> onChange(profile.copy(toHit = v)) }
                             )
                         }
-                        Row(horizontalArrangement = Arrangement.spacedBy(12.dp), modifier = Modifier.fillMaxWidth()) {
-                            GateField2to6(
+                        Row(horizontalArrangement = Arrangement.SpaceEvenly, modifier = Modifier.fillMaxWidth()) {
+                            GateField2to6Centered(
                                 label = "Wnd",
                                 value = profile.toWound,
                                 defaultOnBlur = 4,
                                 onValue = { v -> onChange(profile.copy(toWound = v)) }
                             )
-                            NumberField(
+                            NumberFieldCentered(
                                 label = "Rend",
                                 value = profile.rend,
                                 defaultOnBlur = 0,
                                 onValue = { v -> onChange(profile.copy(rend = v)) }
                             )
-                            NumberField(
+                            NumberFieldCentered(
                                 label = "Dmg",
                                 value = profile.damage,
                                 defaultOnBlur = 0,
@@ -587,10 +614,10 @@ private fun ProfileEditor(
 }
 
 /* =========================
-   Composants numériques (numeric UX V2.1.2)
+   Composants numériques (labels au-dessus, case centrée)
    ========================= */
 @Composable
-private fun NumberField(
+private fun NumberFieldCentered(
     label: String,
     value: Int,
     defaultOnBlur: Int,
@@ -599,7 +626,7 @@ private fun NumberField(
     var text by remember(value) { mutableStateOf(value.toString()) }
     var hadFocus by remember { mutableStateOf(false) }
 
-    Column {
+    Column(horizontalAlignment = Alignment.CenterHorizontally) {
         Text(label, style = MaterialTheme.typography.labelSmall)
         OutlinedTextField(
             value = text,
@@ -615,7 +642,8 @@ private fun NumberField(
             singleLine = true,
             keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
             modifier = Modifier
-                .size(width = 58.dp, height = 50.dp)
+                .width(58.dp)
+                .height(50.dp)
                 .onFocusChanged { st ->
                     if (st.isFocused && !hadFocus) {
                         hadFocus = true
@@ -633,7 +661,7 @@ private fun NumberField(
 }
 
 @Composable
-private fun GateField2to6(
+private fun GateField2to6Centered(
     label: String,
     value: Int,
     defaultOnBlur: Int,
@@ -642,7 +670,7 @@ private fun GateField2to6(
     var text by remember(value) { mutableStateOf(value.toString()) }
     var hadFocus by remember { mutableStateOf(false) }
 
-    Column {
+    Column(horizontalAlignment = Alignment.CenterHorizontally) {
         Text(label, style = MaterialTheme.typography.labelSmall)
         OutlinedTextField(
             value = text,
@@ -661,7 +689,8 @@ private fun GateField2to6(
             singleLine = true,
             keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
             modifier = Modifier
-                .size(width = 58.dp, height = 50.dp)
+                .width(58.dp)
+                .height(50.dp)
                 .onFocusChanged { st ->
                     if (st.isFocused && !hadFocus) {
                         hadFocus = true
