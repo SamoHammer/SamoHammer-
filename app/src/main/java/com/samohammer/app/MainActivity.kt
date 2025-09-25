@@ -1,8 +1,11 @@
-// V2.1.3 — UI: boutons Delete à droite
-// - "Delete Unit" aligné complètement à droite de la ligne d’actions d’unité
-// - "Delete Profile" aligné complètement à droite de la ligne d’actions du profil
-// - Conserve V2.1.2 (numeric UX: clear on focus, vide autorisé, persistance live, blur default)
-// - Conserve V2.1.1 (noms commit-on-blur) et V2.1.0 (AoA persisté + moteur)
+// V2.1.4 — Target tab refactor (1ère unité active)
+// - Colonne Target (par unité) :
+//   * Ward présenté comme un attribut numérique (0 = off, 2..6 = actif)
+//   * Case -1 Hit (toujours branchée à debuffHitEnabled/debuffHitValue)
+//   * Case -1 Wound (UI-only pour l’instant, non persistée)
+// - Aucune nouvelle persistance ajoutée
+// - Conserve V2.1.3 : delete à droite, V2.1.2 : numeric UX (clear on focus, vide autorisé, persistance live),
+//   V2.1.1 : noms commit-on-blur, V2.1.0 : AoA persisté + moteur
 
 package com.samohammer.app
 
@@ -74,7 +77,7 @@ class MainActivity : ComponentActivity() {
                                 units = newUnits
                                 appStateVM.setUnits(newUnits.map { it.toDomain() })
                             }
-                            1 -> TargetTab(target) { t ->
+                            1 -> TargetTab(units, target) { t ->
                                 target = t
                                 appStateVM.updateTarget(t.toDomain())
                             }
@@ -148,13 +151,16 @@ private fun expectedDamageForProfile(p: AttackProfile, target: TargetConfig, bas
     if (!p.active) return 0.0
     val attacks = max(p.models, 0) * max(p.attacks, 0)
     if (attacks == 0) return 0.0
+
     val debuff = if (target.debuffHitEnabled) target.debuffHitValue else 0
     val effHit = effectiveHitThreshold(p.toHit, debuff, p.aoa)
+
     val p6 = 1.0 / 6.0
     val phNon6 = pHitNonSix(effHit)
     val pw = pWound(p.toWound)
     val pu = pUnsaved(baseSave, p.rend)
     val ward = wardFactor(target.wardNeeded)
+
     val evNon6 = phNon6 * pw * pu * p.damage
     val mult6 = if (p.twoHits) 2.0 else 1.0
     val pw6 = if (p.mortal || p.autoW) 1.0 else pw
@@ -169,7 +175,7 @@ private fun expectedDamageForUnit(u: UnitEntry, target: TargetConfig, baseSave: 
 private fun expectedDamageAll(units: List<UnitEntry>, target: TargetConfig, baseSave: Int?): Double =
     units.filter { it.active }.sumOf { expectedDamageForUnit(it, target, baseSave) }
 
-// ===== Profils =====
+// ===== Profils (V2.1.3 stable) =====
 @Composable
 fun ProfilesTab(units: List<UnitEntry>, onUpdateUnits: (List<UnitEntry>) -> Unit) {
     LazyColumn(
@@ -558,61 +564,97 @@ private fun GateField2to6(
     }
 }
 
-// ===== Target tab =====
+// ===== Target tab (V2.1.4) =====
 @Composable
-fun TargetTab(target: TargetConfig, onUpdate: (TargetConfig) -> Unit) {
-    Column(
+fun TargetTab(units: List<UnitEntry>, target: TargetConfig, onUpdate: (TargetConfig) -> Unit) {
+    val activeUnits = units.filter { it.active }.take(1) // 1ère unité active pour l’instant
+    if (activeUnits.isEmpty()) {
+        Column(
+            modifier = Modifier.fillMaxSize().padding(16.dp),
+            verticalArrangement = Arrangement.Center,
+            horizontalAlignment = Alignment.CenterHorizontally
+        ) { Text("No active unit.") }
+        return
+    }
+
+    LazyColumn(
         modifier = Modifier.fillMaxSize().padding(16.dp),
-        verticalArrangement = Arrangement.spacedBy(12.dp)
+        verticalArrangement = Arrangement.spacedBy(16.dp)
     ) {
-        Text("Target buffs/debuffs", style = MaterialTheme.typography.titleMedium)
-        Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-            Text("Ward")
-            var wardTxt by remember(target.wardNeeded) {
-                mutableStateOf(if (target.wardNeeded in 2..6) target.wardNeeded.toString() else "")
-            }
-            OutlinedTextField(
-                value = wardTxt,
-                onValueChange = { newText ->
-                    val digits = newText.filter { it.isDigit() }.take(1)
-                    wardTxt = digits
-                    val v = digits.toIntOrNull()
-                    onUpdate(target.copy(wardNeeded = if (v != null && v in 2..6) v else 0))
-                },
-                placeholder = { Text("off or 2..6") },
-                keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
-                singleLine = true,
-                modifier = Modifier.width(100.dp).height(50.dp)
-            )
-            Text(text = if (target.wardNeeded in 2..6) "${target.wardNeeded}+" else "off")
-        }
-        Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-            Checkbox(
-                checked = target.debuffHitEnabled,
-                onCheckedChange = { enabled ->
-                    onUpdate(target.copy(debuffHitEnabled = enabled, debuffHitValue = if (enabled) target.debuffHitValue else 0))
+        itemsIndexed(activeUnits) { _, unit ->
+            ElevatedCard(Modifier.fillMaxWidth()) {
+                Column(
+                    modifier = Modifier.fillMaxWidth().padding(16.dp),
+                    verticalArrangement = Arrangement.spacedBy(12.dp)
+                ) {
+                    Text("Target Config — ${unit.name}", style = MaterialTheme.typography.titleMedium)
+
+                    // Ici on ne crée que la colonne Target (Attacker viendra ensuite)
+                    Column(
+                        verticalArrangement = Arrangement.spacedBy(12.dp),
+                        modifier = Modifier.fillMaxWidth()
+                    ) {
+                        // Ward: attribut numérique (0/off, 2..6 actif)
+                        Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                            Text("Ward")
+                            var wardTxt by remember(target.wardNeeded) {
+                                mutableStateOf(
+                                    when {
+                                        target.wardNeeded == 0 -> "0"
+                                        target.wardNeeded in 2..6 -> target.wardNeeded.toString()
+                                        else -> ""
+                                    }
+                                )
+                            }
+                            OutlinedTextField(
+                                value = wardTxt,
+                                onValueChange = { newText ->
+                                    val digits = newText.filter { it.isDigit() }.take(1)
+                                    wardTxt = if (digits.isEmpty()) "" else digits
+                                    val v = digits.toIntOrNull()
+                                    onUpdate(target.copy(wardNeeded = v ?: 0))
+                                },
+                                placeholder = { Text("0 or 2..6") },
+                                keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
+                                singleLine = true,
+                                modifier = Modifier.width(80.dp).height(50.dp)
+                            )
+                            Text(text = if (target.wardNeeded in 2..6) "${target.wardNeeded}+" else "off")
+                        }
+
+                        // -1 Hit (persisté comme avant)
+                        Row(verticalAlignment = Alignment.CenterVertically) {
+                            Checkbox(
+                                checked = target.debuffHitEnabled,
+                                onCheckedChange = { enabled ->
+                                    onUpdate(
+                                        target.copy(
+                                            debuffHitEnabled = enabled,
+                                            debuffHitValue = if (enabled) target.debuffHitValue else 0
+                                        )
+                                    )
+                                }
+                            )
+                            Text("-1 Hit")
+                        }
+
+                        // -1 Wound (UI-only pour l’instant)
+                        var debuffWound by remember { mutableStateOf(false) }
+                        Row(verticalAlignment = Alignment.CenterVertically) {
+                            Checkbox(
+                                checked = debuffWound,
+                                onCheckedChange = { checked -> debuffWound = checked }
+                            )
+                            Text("-1 Wound (UI only)")
+                        }
+                    }
                 }
-            )
-            Text("Debuff to hit")
-            OutlinedTextField(
-                value = target.debuffHitValue.toString(),
-                onValueChange = { newText ->
-                    val digits = newText.filter { it.isDigit() }.take(1)
-                    val v = digits.toIntOrNull() ?: 0
-                    onUpdate(target.copy(debuffHitValue = v.coerceIn(0, 3)))
-                },
-                enabled = target.debuffHitEnabled,
-                keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
-                singleLine = true,
-                modifier = Modifier.width(80.dp).height(50.dp)
-            )
-            if (target.debuffHitEnabled) Text("−${target.debuffHitValue} to Hit")
+            }
         }
-        Divider()
     }
 }
 
-// ===== Simulation tab =====
+// ===== Simulation tab (inchangé V2.1.3) =====
 @Composable
 fun SimulationTab(units: List<UnitEntry>, target: TargetConfig) {
     val activeUnits = units.filter { it.active }.take(6)
@@ -644,7 +686,7 @@ fun SimulationTab(units: List<UnitEntry>, target: TargetConfig) {
     }
 }
 
-/* ===== Mapping UI <-> Domain (inclut aoa) ===== */
+/* ===== Mapping UI <-> Domain ===== */
 private fun TargetConfig.toDomain(): com.samohammer.app.model.TargetConfig =
     com.samohammer.app.model.TargetConfig(
         wardNeeded = this.wardNeeded,
