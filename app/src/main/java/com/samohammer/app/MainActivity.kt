@@ -1,13 +1,8 @@
-// V2.1.5 — Onglet Bonus (ex-Target) harmonisé
-// - Renomme l’onglet Target -> Bonus
-// - Harmonisation UI: labels au-dessus, tailles alignées aux profils
-// - Bloc Bonus pour la 1ʳᵉ unité active (extension à 6 viendra ensuite)
-// - Deux colonnes: Target + Attacker
-//   * Target: Ward (numérique), -1 Hit (persisté), -1 Wound (UI-only)
-//   * Attacker: +1 Wound (UI-only)
-// - Aucune nouvelle persistance ajoutée
-// - Conserve V2.1.4 et antérieures: AoA persisté + moteur, numeric UX (clear on focus, vide autorisé, persistance live, blur default),
-//   noms commit-on-blur, boutons Delete alignés à droite.
+// V2.1.6 — Bonus inversé & Ward compact
+// - Attacker à gauche (nom au-dessus, +1 Wound UI-only)
+// - Target à droite (Ward 64.dp, -1 Hit persisté, -1 Wound UI-only)
+// - Conserve V2.1.5 : AoA persisté + moteur, numeric UX (clear on focus, vide autorisé,
+//   persistance live, blur default), noms commit-on-blur, Delete à droite, Simulation.
 
 package com.samohammer.app
 
@@ -37,6 +32,7 @@ class MainActivity : ComponentActivity() {
     private val appStateVM: AppStateViewModel by viewModels {
         AppStateViewModelFactory(applicationContext)
     }
+
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         setContent {
@@ -92,7 +88,9 @@ class MainActivity : ComponentActivity() {
     }
 }
 
-// ===== UI models =====
+/* =========================
+   UI models (UI layer only)
+   ========================= */
 enum class AttackType { MELEE, SHOOT }
 
 data class AttackProfile(
@@ -108,7 +106,7 @@ data class AttackProfile(
     val twoHits: Boolean = false,
     val autoW: Boolean = false,
     val mortal: Boolean = false,
-    val aoa: Boolean = false // persisté via mapping
+    val aoa: Boolean = false, // persisté via mapping
 )
 
 data class UnitEntry(
@@ -123,32 +121,41 @@ data class TargetConfig(
     val debuffHitValue: Int = 1
 )
 
-// ===== Engine (AoA inclus) =====
+/* =========================
+   Moteur (AoA inclus)
+   ========================= */
 private fun clamp2to6(x: Int) = x.coerceIn(2, 6)
+
 private fun pGate(needed: Int): Double = when {
     needed <= 1 -> 1.0
     needed >= 7 -> 0.0
     else -> (7 - needed) / 6.0
 }
+
 private fun effectiveHitThreshold(baseNeeded: Int, debuff: Int, aoa: Boolean): Int {
     val buff = if (aoa) -1 else 0
     return clamp2to6(baseNeeded + debuff + buff) // min 2+, max 6+
 }
+
 private fun pHitNonSix(effNeeded: Int): Double {
     val successes = (6 - effNeeded).coerceAtLeast(0)
     return successes / 6.0
 }
+
 private fun pWound(needed: Int): Double = pGate(needed)
+
 private fun pUnsaved(baseSave: Int?, rend: Int): Double {
     if (baseSave == null) return 1.0
     val eff = baseSave + rend
     if (eff >= 7) return 1.0
     return 1.0 - pGate(eff)
 }
+
 private fun wardFactor(wardNeeded: Int): Double {
     if (wardNeeded !in 2..6) return 1.0
     return 1.0 - pGate(wardNeeded)
 }
+
 private fun expectedDamageForProfile(p: AttackProfile, target: TargetConfig, baseSave: Int?): Double {
     if (!p.active) return 0.0
     val attacks = max(p.models, 0) * max(p.attacks, 0)
@@ -170,14 +177,18 @@ private fun expectedDamageForProfile(p: AttackProfile, target: TargetConfig, bas
     val ev6 = p6 * mult6 * pw6 * pu6 * p.damage
     return attacks * (evNon6 + ev6) * ward
 }
+
 private fun expectedDamageForUnit(u: UnitEntry, target: TargetConfig, baseSave: Int?): Double {
     if (!u.active) return 0.0
     return u.profiles.sumOf { expectedDamageForProfile(it, target, baseSave) }
 }
+
 private fun expectedDamageAll(units: List<UnitEntry>, target: TargetConfig, baseSave: Int?): Double =
     units.filter { it.active }.sumOf { expectedDamageForUnit(it, target, baseSave) }
 
-// ===== Composants partagés (labels au-dessus) =====
+/* =========================
+   Composants partagés (labels au-dessus)
+   ========================= */
 @Composable
 private fun TopLabeled(label: String, content: @Composable () -> Unit) {
     Column(horizontalAlignment = Alignment.Start) {
@@ -185,6 +196,7 @@ private fun TopLabeled(label: String, content: @Composable () -> Unit) {
         content()
     }
 }
+
 @Composable
 private fun TopLabeledCheckbox(
     label: String,
@@ -202,7 +214,112 @@ private fun TopLabeledCheckbox(
     }
 }
 
-// ===== Profils (stable: delete à droite, noms commit-on-blur, numeric UX) =====
+/* =========================
+   Onglet Bonus (ex-Target) — V2.1.6
+   ========================= */
+@Composable
+fun BonusTab(units: List<UnitEntry>, target: TargetConfig, onUpdate: (TargetConfig) -> Unit) {
+    val activeUnits = units.filter { it.active }.take(1) // pour l’instant: 1ʳᵉ unité active
+    if (activeUnits.isEmpty()) {
+        Column(
+            modifier = Modifier.fillMaxSize().padding(16.dp),
+            verticalArrangement = Arrangement.Center,
+            horizontalAlignment = Alignment.CenterHorizontally
+        ) { Text("No active unit.") }
+        return
+    }
+
+    LazyColumn(
+        modifier = Modifier.fillMaxSize().padding(16.dp),
+        verticalArrangement = Arrangement.spacedBy(16.dp)
+    ) {
+        itemsIndexed(activeUnits) { _, unit ->
+            ElevatedCard(Modifier.fillMaxWidth()) {
+                Column(
+                    modifier = Modifier.fillMaxWidth().padding(16.dp),
+                    verticalArrangement = Arrangement.spacedBy(12.dp)
+                ) {
+                    Text("Bonus Config — ${unit.name}", style = MaterialTheme.typography.titleMedium)
+
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.SpaceBetween,
+                        verticalAlignment = Alignment.Top
+                    ) {
+                        // ===== Attacker à GAUCHE =====
+                        Column(
+                            verticalArrangement = Arrangement.spacedBy(12.dp),
+                            modifier = Modifier.weight(1f)
+                        ) {
+                            Text(unit.name, style = MaterialTheme.typography.titleSmall)
+                            var buffWound by remember { mutableStateOf(false) }
+                            TopLabeledCheckbox(
+                                label = "+1 Wound",
+                                checked = buffWound,
+                                onCheckedChange = { buffWound = it }
+                            )
+                        }
+
+                        // ===== Target à DROITE =====
+                        Column(
+                            verticalArrangement = Arrangement.spacedBy(12.dp),
+                            horizontalAlignment = Alignment.End,
+                            modifier = Modifier.weight(1f)
+                        ) {
+                            TopLabeled("Ward") {
+                                var wardTxt by remember(target.wardNeeded) {
+                                    mutableStateOf(
+                                        when {
+                                            target.wardNeeded == 0 -> "0"
+                                            target.wardNeeded in 2..6 -> target.wardNeeded.toString()
+                                            else -> ""
+                                        }
+                                    )
+                                }
+                                OutlinedTextField(
+                                    value = wardTxt,
+                                    onValueChange = { newText ->
+                                        val digits = newText.filter { it.isDigit() }.take(1)
+                                        wardTxt = if (digits.isEmpty()) "" else digits
+                                        onUpdate(target.copy(wardNeeded = digits.toIntOrNull() ?: 0))
+                                    },
+                                    placeholder = { Text("0 or 2..6") },
+                                    keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
+                                    singleLine = true,
+                                    modifier = Modifier.width(64.dp).height(50.dp) // compact V2.1.6
+                                )
+                            }
+
+                            TopLabeledCheckbox(
+                                label = "-1 Hit",
+                                checked = target.debuffHitEnabled,
+                                onCheckedChange = { enabled ->
+                                    onUpdate(
+                                        target.copy(
+                                            debuffHitEnabled = enabled,
+                                            debuffHitValue = if (enabled) target.debuffHitValue else 0
+                                        )
+                                    )
+                                }
+                            )
+
+                            var debuffWound by remember { mutableStateOf(false) }
+                            TopLabeledCheckbox(
+                                label = "-1 Wound",
+                                checked = debuffWound,
+                                onCheckedChange = { debuffWound = it }
+                            )
+                        }
+                    }
+                }
+            }
+        }
+    }
+}
+
+/* =========================
+   Profils (stable V2.1.x)
+   ========================= */
 @Composable
 fun ProfilesTab(units: List<UnitEntry>, onUpdateUnits: (List<UnitEntry>) -> Unit) {
     LazyColumn(
@@ -432,7 +549,7 @@ private fun ProfileEditor(
                         }
                     }
 
-                    // Colonne droite : checkboxes (persist immédiat)
+                    // Colonne droite : checkboxes
                     Column(
                         verticalArrangement = Arrangement.spacedBy(12.dp),
                         horizontalAlignment = Alignment.End,
@@ -469,7 +586,9 @@ private fun ProfileEditor(
     }
 }
 
-// ===== Composants numériques (numeric UX V2.1.2) =====
+/* =========================
+   Composants numériques (numeric UX V2.1.2)
+   ========================= */
 @Composable
 private fun NumberField(
     label: String,
@@ -490,8 +609,7 @@ private fun NumberField(
                     text = ""
                 } else {
                     text = digits
-                    val v = digits.toIntOrNull()
-                    if (v != null) onValue(v) // persistance live si valide
+                    digits.toIntOrNull()?.let { onValue(it) } // persistance live si valide
                 }
             },
             singleLine = true,
@@ -550,15 +668,10 @@ private fun GateField2to6(
                         text = "" // clear on focus
                     } else if (!st.isFocused) {
                         hadFocus = false
-                        if (text.isEmpty()) {
+                        val v = text.toIntOrNull()
+                        if (text.isEmpty() || v == null || v !in 2..6) {
                             text = defaultOnBlur.toString()
                             onValue(defaultOnBlur)
-                        } else {
-                            val v = text.toIntOrNull()
-                            if (v == null || v !in 2..6) {
-                                text = defaultOnBlur.toString()
-                                onValue(defaultOnBlur)
-                            }
                         }
                     }
                 }
@@ -566,108 +679,9 @@ private fun GateField2to6(
     }
 }
 
-// ===== Onglet Bonus (ex-Target) =====
-@Composable
-fun BonusTab(units: List<UnitEntry>, target: TargetConfig, onUpdate: (TargetConfig) -> Unit) {
-    val activeUnits = units.filter { it.active }.take(1) // pour l’instant: 1ʳᵉ unité active
-    if (activeUnits.isEmpty()) {
-        Column(
-            modifier = Modifier.fillMaxSize().padding(16.dp),
-            verticalArrangement = Arrangement.Center,
-            horizontalAlignment = Alignment.CenterHorizontally
-        ) { Text("No active unit.") }
-        return
-    }
-
-    LazyColumn(
-        modifier = Modifier.fillMaxSize().padding(16.dp),
-        verticalArrangement = Arrangement.spacedBy(16.dp)
-    ) {
-        itemsIndexed(activeUnits) { _, unit ->
-            ElevatedCard(Modifier.fillMaxWidth()) {
-                Column(
-                    modifier = Modifier.fillMaxWidth().padding(16.dp),
-                    verticalArrangement = Arrangement.spacedBy(12.dp)
-                ) {
-                    Text("Bonus Config — ${unit.name}", style = MaterialTheme.typography.titleMedium)
-
-                    Row(
-                        modifier = Modifier.fillMaxWidth(),
-                        horizontalArrangement = Arrangement.SpaceBetween,
-                        verticalAlignment = Alignment.Top
-                    ) {
-                        // Colonne Target (labels au-dessus)
-                        Column(
-                            verticalArrangement = Arrangement.spacedBy(12.dp),
-                            modifier = Modifier.weight(1f)
-                        ) {
-                            TopLabeled("Ward") {
-                                var wardTxt by remember(target.wardNeeded) {
-                                    mutableStateOf(
-                                        when {
-                                            target.wardNeeded == 0 -> "0"
-                                            target.wardNeeded in 2..6 -> target.wardNeeded.toString()
-                                            else -> ""
-                                        }
-                                    )
-                                }
-                                OutlinedTextField(
-                                    value = wardTxt,
-                                    onValueChange = { newText ->
-                                        val digits = newText.filter { it.isDigit() }.take(1)
-                                        wardTxt = if (digits.isEmpty()) "" else digits
-                                        val v = digits.toIntOrNull()
-                                        onUpdate(target.copy(wardNeeded = v ?: 0))
-                                    },
-                                    placeholder = { Text("0 or 2..6") },
-                                    keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
-                                    singleLine = true,
-                                    modifier = Modifier.width(80.dp).height(50.dp)
-                                )
-                            }
-
-                            TopLabeledCheckbox(
-                                label = "-1 Hit",
-                                checked = target.debuffHitEnabled,
-                                onCheckedChange = { enabled ->
-                                    onUpdate(
-                                        target.copy(
-                                            debuffHitEnabled = enabled,
-                                            debuffHitValue = if (enabled) target.debuffHitValue else 0
-                                        )
-                                    )
-                                }
-                            )
-
-                            var debuffWound by remember { mutableStateOf(false) }
-                            TopLabeledCheckbox(
-                                label = "-1 Wound",
-                                checked = debuffWound,
-                                onCheckedChange = { debuffWound = it }
-                            )
-                        }
-
-                        // Colonne Attacker (labels au-dessus)
-                        Column(
-                            verticalArrangement = Arrangement.spacedBy(12.dp),
-                            horizontalAlignment = Alignment.End,
-                            modifier = Modifier.weight(1f)
-                        ) {
-                            var buffWound by remember { mutableStateOf(false) }
-                            TopLabeledCheckbox(
-                                label = "+1 Wound",
-                                checked = buffWound,
-                                onCheckedChange = { buffWound = it }
-                            )
-                        }
-                    }
-                }
-            }
-        }
-    }
-}
-
-// ===== Simulation tab =====
+/* =========================
+   Simulation
+   ========================= */
 @Composable
 fun SimulationTab(units: List<UnitEntry>, target: TargetConfig) {
     val activeUnits = units.filter { it.active }.take(6)
@@ -699,13 +713,16 @@ fun SimulationTab(units: List<UnitEntry>, target: TargetConfig) {
     }
 }
 
-/* ===== Mapping UI <-> Domain ===== */
+/* =========================
+   Mapping UI <-> Domain
+   ========================= */
 private fun TargetConfig.toDomain(): com.samohammer.app.model.TargetConfig =
     com.samohammer.app.model.TargetConfig(
         wardNeeded = this.wardNeeded,
         debuffHitEnabled = this.debuffHitEnabled,
         debuffHitValue = this.debuffHitValue
     )
+
 private fun com.samohammer.app.model.TargetConfig.toUi(): TargetConfig =
     TargetConfig(
         wardNeeded = this.wardNeeded,
@@ -756,6 +773,7 @@ private fun AttackProfile.toDomain(): com.samohammer.app.model.AttackProfile =
 
 private fun com.samohammer.app.model.UnitEntry.toUi(): UnitEntry =
     UnitEntry(name = name, active = active, profiles = profiles.map { it.toUi() })
+
 private fun UnitEntry.toDomain(): com.samohammer.app.model.UnitEntry =
     com.samohammer.app.model.UnitEntry(
         id = com.samohammer.app.util.newUuid(),
