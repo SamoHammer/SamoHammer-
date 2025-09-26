@@ -1,9 +1,8 @@
-// V2.3.0 — Palette verte + contraste cartes
-// - Ajoute un contraste visuel net entre les cartes :
-//   * Carte Unité (ProfilesTab)      -> surfaceVariant (vert/gris léger)
-//   * Carte Weapon Profile (éditeur)  -> surface (blanc)
-//   * Carte Target (onglet Bonus)     -> tertiaryContainer (vert pâle dédié)
-// - Aucun changement de logique ou d’ergonomie par rapport à V2.2.9.
+// V2.3.1 — Fix build (TopLabeledCheckbox calls) + palette verte déjà appliquée
+// - Corrige TOUTES les invocations de TopLabeledCheckbox avec des paramètres nommés
+//   (label=, checked=, onCheckedChange=) pour éviter l’ambiguïté du trailing lambda.
+// - Conserve V2.3.0 : contraste cartes (Unité=surfaceVariant, Profile=surface, Target=tertiaryContainer),
+//   moteur inchangé, early return Simulation si 0 unité active.
 
 package com.samohammer.app
 
@@ -68,7 +67,7 @@ class MainActivity : ComponentActivity() {
                         wardNeeded = inc.wardNeeded,
                         debuffHitEnabled = inc.debuffHitEnabled,
                         debuffHitValue = inc.debuffHitValue
-                        // UI-only: debuffWound/Rend/Atk/Dmg conservés
+                        // UI-only: autres debuffs Target conservés
                     )
                 }
 
@@ -138,7 +137,7 @@ data class AttackProfile(
     // Bonus UI-only (non persistés)
     val bonusHit: Boolean = false,
     val bonusWound: Boolean = false,
-    val bonusAtk: Int = 0,       // 0..2 (ajout d’attaques)
+    val bonusAtk: Int = 0,       // 0..2
     val bonusRend: Boolean = false,
     val bonusDmg: Boolean = false
 )
@@ -164,7 +163,6 @@ data class TargetConfig(
    MERGE helpers
    ========================= */
 private fun isUnitPlaceholder(name: String): Boolean {
-    // "Unit", "Unit 1", "Unit 12", "Unit    3", ou vide
     return name.isBlank() || name == "Unit" || name.matches(Regex("""Unit\s*\d*"""))
 }
 private fun isProfilePlaceholder(name: String): Boolean {
@@ -233,14 +231,12 @@ private fun pGate(needed: Int): Double = when {
     else -> (7 - needed) / 6.0
 }
 
-// Cap ±1 sur Hit (par rapport au profil de base)
 private fun effectiveHitWithCap(baseToHit: Int, aoa: Boolean, bonusHit: Boolean, targetDebuffHit: Int): Int {
     val sum = (if (aoa) -1 else 0) + (if (bonusHit) -1 else 0) + targetDebuffHit
     val capped = sum.coerceIn(-1, 1)
     return clamp2to6(baseToHit + capped)
 }
 
-// Cap ±1 sur Wound (par rapport au profil de base)
 private fun effectiveWoundWithCap(baseToWound: Int, bonusWound: Boolean, targetDebuffWound: Boolean): Int {
     val sum = (if (bonusWound) -1 else 0) + (if (targetDebuffWound) +1 else 0)
     val capped = sum.coerceIn(-1, 1)
@@ -268,12 +264,12 @@ private fun expectedDamageForProfile(p: AttackProfile, target: TargetConfig, bas
     val models = max(p.models, 0)
     if (models == 0) return 0.0
 
-    // ---- Attacks effectif (min 1, sauf models=0 déjà traité) ----
+    // Attacks effectif (min 1, sauf models=0 déjà traité)
     val extraAttacks = p.bonusAtk + (if (target.debuffAtkEnabled) -1 else 0)
     val effAttacksStat = max(1, p.attacks + extraAttacks)
     val totalAttacks = models * effAttacksStat
 
-    // ---- Hit/Wound avec cap ±1 ----
+    // Hit/Wound avec cap ±1
     val targetDebuffHit = if (target.debuffHitEnabled) target.debuffHitValue else 0
     val effHit = effectiveHitWithCap(
         baseToHit = p.toHit,
@@ -287,7 +283,7 @@ private fun expectedDamageForProfile(p: AttackProfile, target: TargetConfig, bas
         targetDebuffWound = target.debuffWoundEnabled
     )
 
-    // ---- Rend / Damage avec min Dmg=1 ----
+    // Rend / Damage (min Dmg=1)
     val effRend = p.rend +
         (if (p.bonusRend) 1 else 0) +
         (if (target.debuffRendEnabled) -1 else 0)
@@ -297,17 +293,14 @@ private fun expectedDamageForProfile(p: AttackProfile, target: TargetConfig, bas
         (if (target.debuffDmgEnabled) 1 else 0)
     val effDamage = max(1, rawDamage)
 
-    // ---- Probabilités ----
+    // Probabilités
     val p6 = 1.0 / 6.0
     val phNon6 = pHitNonSix(effHit)
     val pw = pWound(effWound)
     val pu = pUnsaved(baseSave, effRend)
     val ward = wardFactor(target.wardNeeded)
 
-    // ---- EV hors 6 (pas d'effet spécial) ----
     val evNon6 = phNon6 * pw * pu * effDamage
-
-    // ---- EV sur 6 au jet pour toucher ----
     val mult6 = if (p.twoHits) 2.0 else 1.0
     val pw6 = if (p.mortal || p.autoW) 1.0 else pw
     val pu6 = if (p.mortal) 1.0 else pu
@@ -341,7 +334,7 @@ private fun formatBonusSummary(p: AttackProfile): String {
 }
 
 /* =========================
-   Composants partagés (labels au-dessus)
+   Shared UI bits
    ========================= */
 @Composable
 private fun TopLabeled(label: String, content: @Composable () -> Unit) {
@@ -378,7 +371,7 @@ fun BonusTab(units: List<UnitEntry>, target: TargetConfig, onUpdate: (TargetConf
         modifier = Modifier.fillMaxSize().padding(16.dp),
         verticalArrangement = Arrangement.spacedBy(16.dp)
     ) {
-        // 1) Target en haut — CONTRASTE: tertiaryContainer
+        // Target en haut — CONTRASTE
         item {
             ElevatedCard(
                 colors = CardDefaults.elevatedCardColors(
@@ -474,7 +467,7 @@ fun BonusTab(units: List<UnitEntry>, target: TargetConfig, onUpdate: (TargetConf
             }
         }
 
-        // 2) Cartes unités: résumé profils
+        // Cartes unités: résumé profils
         if (activeUnits.isEmpty()) {
             item {
                 Column(
@@ -877,6 +870,7 @@ private fun NumberFieldCentered(
         )
     }
 }
+
 @Composable
 private fun GateField2to6Centered(
     label: String, value: Int, defaultOnBlur: Int, onValue: (Int) -> Unit
@@ -920,7 +914,6 @@ private fun GateField2to6Centered(
 fun SimulationTab(units: List<UnitEntry>, target: TargetConfig) {
     val activeUnits = units.filter { it.active }.take(6)
 
-    // ---- NO-CRASH: si aucune unité, on sort avant de construire le tableau ----
     if (activeUnits.isEmpty()) {
         Box(
             modifier = Modifier.fillMaxSize(),
@@ -959,7 +952,6 @@ fun SimulationTab(units: List<UnitEntry>, target: TargetConfig) {
 /* =========================
    Mapping UI <-> Domain
    ========================= */
-// Seuls ward/debuffHit sont persistés; le reste des toggles Target et les bonus profil sont UI-only.
 private fun TargetConfig.toDomain(): com.samohammer.app.model.TargetConfig =
     com.samohammer.app.model.TargetConfig(
         wardNeeded = this.wardNeeded,
