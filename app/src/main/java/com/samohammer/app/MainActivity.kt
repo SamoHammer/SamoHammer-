@@ -1,8 +1,7 @@
-// V2.2.7 — Fixes
-// - Cold start: on conserve les noms vides même si DataStore envoie "Unit", "Unit 1", etc. (placeholder élargi).
-// - Profils: colonnes de coches revenues en 2×2 (2Hits+AutoW / Mortal+AoA).
-// - Bonus/Target: libellé "-1 Wnd" (au lieu de "-1 Wound").
-// - Le reste inchangé: DMG min 1, ATK min 1 (sauf models=0), cap ±1 Hit/Wound, Target en haut, UI-only branché moteur.
+// V2.2.8 — Build fix
+// - Corrige tous les appels à TopLabeledCheckbox (arguments nommés + onCheckedChange explicite).
+// - Corrige la typo moteur: pHitNonSix() (plus de phNonSix).
+// - Conserve tout le reste de V2.2.7 (Target en haut, 2×2 checkboxes, cold start noms vides, cap ±1, mins, etc.).
 
 package com.samohammer.app
 
@@ -67,7 +66,7 @@ class MainActivity : ComponentActivity() {
                         wardNeeded = inc.wardNeeded,
                         debuffHitEnabled = inc.debuffHitEnabled,
                         debuffHitValue = inc.debuffHitValue
-                        // on NE touche PAS aux debuffs UI-only : debuffWound/Rend/Atk/Dmg
+                        // UI-only: debuffWound/Rend/Atk/Dmg conservés
                     )
                 }
 
@@ -137,7 +136,7 @@ data class AttackProfile(
     // Bonus UI-only (non persistés)
     val bonusHit: Boolean = false,
     val bonusWound: Boolean = false,
-    val bonusAtk: Int = 0,       // 0..2
+    val bonusAtk: Int = 0,       // 0..2 (ajout d’attaques)
     val bonusRend: Boolean = false,
     val bonusDmg: Boolean = false
 )
@@ -222,24 +221,30 @@ private fun mergeProfilesKeepUiOnlyAndBlankNames(
 }
 
 /* =========================
-   Moteur
+   Moteur (AoA + Bonus + Debuffs Target + Cap ±1 + mins)
    ========================= */
 private fun clamp2to6(x: Int) = x.coerceIn(2, 6)
+
 private fun pGate(needed: Int): Double = when {
     needed <= 1 -> 1.0
     needed >= 7 -> 0.0
     else -> (7 - needed) / 6.0
 }
+
+// Cap ±1 sur Hit (par rapport au profil de base)
 private fun effectiveHitWithCap(baseToHit: Int, aoa: Boolean, bonusHit: Boolean, targetDebuffHit: Int): Int {
     val sum = (if (aoa) -1 else 0) + (if (bonusHit) -1 else 0) + targetDebuffHit
     val capped = sum.coerceIn(-1, 1)
     return clamp2to6(baseToHit + capped)
 }
+
+// Cap ±1 sur Wound (par rapport au profil de base)
 private fun effectiveWoundWithCap(baseToWound: Int, bonusWound: Boolean, targetDebuffWound: Boolean): Int {
     val sum = (if (bonusWound) -1 else 0) + (if (targetDebuffWound) +1 else 0)
     val capped = sum.coerceIn(-1, 1)
     return clamp2to6(baseToWound + capped)
 }
+
 private fun pHitNonSix(effNeeded: Int): Double {
     val successes = (6 - effNeeded).coerceAtLeast(0)
     return successes / 6.0
@@ -255,30 +260,52 @@ private fun wardFactor(wardNeeded: Int): Double {
     if (wardNeeded !in 2..6) return 1.0
     return 1.0 - pGate(wardNeeded)
 }
+
 private fun expectedDamageForProfile(p: AttackProfile, target: TargetConfig, baseSave: Int?): Double {
     if (!p.active) return 0.0
     val models = max(p.models, 0)
     if (models == 0) return 0.0
 
+    // ---- Attacks effectif (min 1, sauf models=0 déjà traité) ----
     val extraAttacks = p.bonusAtk + (if (target.debuffAtkEnabled) -1 else 0)
     val effAttacksStat = max(1, p.attacks + extraAttacks)
     val totalAttacks = models * effAttacksStat
 
+    // ---- Hit/Wound avec cap ±1 ----
     val targetDebuffHit = if (target.debuffHitEnabled) target.debuffHitValue else 0
-    val effHit = effectiveHitWithCap(p.toHit, p.aoa, p.bonusHit, targetDebuffHit)
-    val effWound = effectiveWoundWithCap(p.toWound, p.bonusWound, target.debuffWoundEnabled)
+    val effHit = effectiveHitWithCap(
+        baseToHit = p.toHit,
+        aoa = p.aoa,
+        bonusHit = p.bonusHit,
+        targetDebuffHit = targetDebuffHit
+    )
+    val effWound = effectiveWoundWithCap(
+        baseToWound = p.toWound,
+        bonusWound = p.bonusWound,
+        targetDebuffWound = target.debuffWoundEnabled
+    )
 
-    val effRend = p.rend + (if (p.bonusRend) 1 else 0) + (if (target.debuffRendEnabled) -1 else 0)
-    val rawDamage = p.damage + (if (p.bonusDmg) 1 else 0) - (if (target.debuffDmgEnabled) 1 else 0)
+    // ---- Rend / Damage avec min Dmg=1 ----
+    val effRend = p.rend +
+        (if (p.bonusRend) 1 else 0) +
+        (if (target.debuffRendEnabled) -1 else 0)
+
+    val rawDamage = p.damage +
+        (if (p.bonusDmg) 1 else 0) -
+        (if (target.debuffDmgEnabled) 1 else 0)
     val effDamage = max(1, rawDamage)
 
+    // ---- Probabilités ----
     val p6 = 1.0 / 6.0
     val phNon6 = pHitNonSix(effHit)
     val pw = pWound(effWound)
     val pu = pUnsaved(baseSave, effRend)
     val ward = wardFactor(target.wardNeeded)
 
+    // ---- EV hors 6 (pas d'effet spécial) ----
     val evNon6 = phNon6 * pw * pu * effDamage
+
+    // ---- EV sur 6 au jet pour toucher ----
     val mult6 = if (p.twoHits) 2.0 else 1.0
     val pw6 = if (p.mortal || p.autoW) 1.0 else pw
     val pu6 = if (p.mortal) 1.0 else pu
@@ -286,10 +313,12 @@ private fun expectedDamageForProfile(p: AttackProfile, target: TargetConfig, bas
 
     return totalAttacks * (evNon6 + ev6) * ward
 }
+
 private fun expectedDamageForUnit(u: UnitEntry, target: TargetConfig, baseSave: Int?): Double {
     if (!u.active) return 0.0
     return u.profiles.sumOf { expectedDamageForProfile(it, target, baseSave) }
 }
+
 private fun expectedDamageAll(units: List<UnitEntry>, target: TargetConfig, baseSave: Int?): Double =
     units.filter { it.active }.sumOf { expectedDamageForUnit(it, target, baseSave) }
 
@@ -298,6 +327,7 @@ private fun expectedDamageAll(units: List<UnitEntry>, target: TargetConfig, base
    ========================= */
 private fun AttackProfile.hasAnyBonus(): Boolean =
     bonusHit || bonusWound || bonusAtk > 0 || bonusRend || bonusDmg
+
 private fun formatBonusSummary(p: AttackProfile): String {
     val parts = mutableListOf<String>()
     if (p.bonusHit) parts += "+1 Hit"
@@ -309,7 +339,7 @@ private fun formatBonusSummary(p: AttackProfile): String {
 }
 
 /* =========================
-   Composants partagés
+   Composants partagés (labels au-dessus)
    ========================= */
 @Composable
 private fun TopLabeled(label: String, content: @Composable () -> Unit) {
@@ -318,6 +348,7 @@ private fun TopLabeled(label: String, content: @Composable () -> Unit) {
         content()
     }
 }
+
 @Composable
 private fun TopLabeledCheckbox(
     label: String,
@@ -685,12 +716,28 @@ private fun ProfileEditor(
                         modifier = Modifier.width(130.dp)
                     ) {
                         Row(horizontalArrangement = Arrangement.spacedBy(8.dp), modifier = Modifier.fillMaxWidth()) {
-                            TopLabeledCheckbox("2Hits", profile.twoHits) { onChange(profile.copy(twoHits = it)) }
-                            TopLabeledCheckbox("AutoW", profile.autoW) { onChange(profile.copy(autoW = it)) }
+                            TopLabeledCheckbox(
+                                label = "2Hits",
+                                checked = profile.twoHits,
+                                onCheckedChange = { checked -> onChange(profile.copy(twoHits = checked)) }
+                            )
+                            TopLabeledCheckbox(
+                                label = "AutoW",
+                                checked = profile.autoW,
+                                onCheckedChange = { checked -> onChange(profile.copy(autoW = checked)) }
+                            )
                         }
                         Row(horizontalArrangement = Arrangement.spacedBy(8.dp), modifier = Modifier.fillMaxWidth()) {
-                            TopLabeledCheckbox("Mortal", profile.mortal) { onChange(profile.copy(mortal = it)) }
-                            TopLabeledCheckbox("AoA", profile.aoa) { onChange(profile.copy(aoa = it)) }
+                            TopLabeledCheckbox(
+                                label = "Mortal",
+                                checked = profile.mortal,
+                                onCheckedChange = { checked -> onChange(profile.copy(mortal = checked)) }
+                            )
+                            TopLabeledCheckbox(
+                                label = "AoA",
+                                checked = profile.aoa,
+                                onCheckedChange = { checked -> onChange(profile.copy(aoa = checked)) }
+                            )
                         }
                     }
                 }
@@ -710,24 +757,50 @@ private fun ProfileEditor(
                 title = { Text("${unitName.ifBlank { " " }} – ${profile.name.ifBlank { " " }}") },
                 text = {
                     Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                        Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.SpaceBetween, modifier = Modifier.fillMaxWidth()) {
-                            Text("+1 Hit"); Switch(checked = tempHit, onCheckedChange = { tempHit = it })
+                        Row(
+                            verticalAlignment = Alignment.CenterVertically,
+                            horizontalArrangement = Arrangement.SpaceBetween,
+                            modifier = Modifier.fillMaxWidth()
+                        ) {
+                            Text("+1 Hit")
+                            Switch(checked = tempHit, onCheckedChange = { tempHit = it })
                         }
-                        Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.SpaceBetween, modifier = Modifier.fillMaxWidth()) {
-                            Text("+1 Wound"); Switch(checked = tempWound, onCheckedChange = { tempWound = it })
+                        Row(
+                            verticalAlignment = Alignment.CenterVertically,
+                            horizontalArrangement = Arrangement.SpaceBetween,
+                            modifier = Modifier.fillMaxWidth()
+                        ) {
+                            Text("+1 Wound")
+                            Switch(checked = tempWound, onCheckedChange = { tempWound = it })
                         }
                         Column {
                             Text("+1 Atk (x${tempAtk})")
                             Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                                Button(onClick = { tempAtk = (tempAtk - 1).coerceAtLeast(0) }, enabled = tempAtk > 0) { Text("-") }
-                                Button(onClick = { tempAtk = (tempAtk + 1).coerceAtMost(2) }, enabled = tempAtk < 2) { Text("+") }
+                                Button(
+                                    onClick = { tempAtk = (tempAtk - 1).coerceAtLeast(0) },
+                                    enabled = tempAtk > 0
+                                ) { Text("-") }
+                                Button(
+                                    onClick = { tempAtk = (tempAtk + 1).coerceAtMost(2) },
+                                    enabled = tempAtk < 2
+                                ) { Text("+") }
                             }
                         }
-                        Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.SpaceBetween, modifier = Modifier.fillMaxWidth()) {
-                            Text("+1 Rend"); Switch(checked = tempRend, onCheckedChange = { tempRend = it })
+                        Row(
+                            verticalAlignment = Alignment.CenterVertically,
+                            horizontalArrangement = Arrangement.SpaceBetween,
+                            modifier = Modifier.fillMaxWidth()
+                        ) {
+                            Text("+1 Rend")
+                            Switch(checked = tempRend, onCheckedChange = { tempRend = it })
                         }
-                        Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.SpaceBetween, modifier = Modifier.fillMaxWidth()) {
-                            Text("+1 Dmg"); Switch(checked = tempDmg, onCheckedChange = { tempDmg = it })
+                        Row(
+                            verticalAlignment = Alignment.CenterVertically,
+                            horizontalArrangement = Arrangement.SpaceBetween,
+                            modifier = Modifier.fillMaxWidth()
+                        ) {
+                            Text("+1 Dmg")
+                            Switch(checked = tempDmg, onCheckedChange = { tempDmg = it })
                         }
                     }
                 },
@@ -859,6 +932,7 @@ fun SimulationTab(units: List<UnitEntry>, target: TargetConfig) {
 /* =========================
    Mapping UI <-> Domain
    ========================= */
+// Seuls ward/debuffHit sont persistés; le reste des toggles Target et les bonus profil sont UI-only.
 private fun TargetConfig.toDomain(): com.samohammer.app.model.TargetConfig =
     com.samohammer.app.model.TargetConfig(
         wardNeeded = this.wardNeeded,
@@ -890,6 +964,7 @@ private fun com.samohammer.app.model.AttackProfile.toUi(): AttackProfile =
         autoW = autoW,
         mortal = mortal,
         aoa = aoa
+        // bonus* non mappés (UI-only)
     )
 private fun AttackProfile.toDomain(): com.samohammer.app.model.AttackProfile =
     com.samohammer.app.model.AttackProfile(
@@ -910,6 +985,7 @@ private fun AttackProfile.toDomain(): com.samohammer.app.model.AttackProfile =
         autoW = autoW,
         mortal = mortal,
         aoa = aoa
+        // bonus* non persistés
     )
 private fun com.samohammer.app.model.UnitEntry.toUi(): UnitEntry =
     UnitEntry(name = name, active = active, profiles = profiles.map { it.toUi() })
