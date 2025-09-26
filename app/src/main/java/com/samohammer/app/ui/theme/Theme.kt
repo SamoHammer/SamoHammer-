@@ -13,62 +13,81 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.toArgb
 import androidx.compose.ui.platform.LocalView
 
-// ===========================
-// Palette M3 (dépend de Color.kt)
-// ===========================
-private val LightColors: ColorScheme = lightColorScheme(
-    primary = GreenPrimary,
-    onPrimary = Color.White,
-    secondary = GreenSecondary,
-    onSecondary = Color.White,
-    tertiary = GreenSecondaryLight,
-    onTertiary = Color.White,
+/**
+ * Theme.kt aligné sur le Color.kt "nouveaux noms"
+ * (DarkBackground, UnitCard, WeaponCard, TargetCard, TextPrimary, TextSecondary,
+ *  AccentGreen, DividerGreen, etc.).
+ *
+ * Aucune référence aux anciens identifiants (GreenPrimary, SurfaceVariant, etc.).
+ * Pas de Typography.kt requis (on passe Typography()).
+ */
 
-    background = Color.White,
+// ---------- Color mapping vers Material3 ----------
+private val LightColors: ColorScheme = lightColorScheme(
+    // Brand / Accents
+    primary = AccentGreen,
+    onPrimary = Color.White,
+    secondary = AccentGreen,        // on garde le même accent pour cohérence
+    onSecondary = Color.White,
+    tertiary = AccentGreen,         // peu utilisé (fallback)
+
+    // Background / Surface
+    background = Color.White,       // mode clair (si activé par l’OS)
     onBackground = Color.Black,
     surface = Color.White,
     onSurface = Color.Black,
 
-    surfaceVariant = SurfaceVariant,
-    onSurfaceVariant = OnSurfaceVariant,
+    // Surfaces spécifiques (nous les consommons via MaterialTheme.colorScheme.*)
+    surfaceVariant = WeaponCard,    // carte "Weapon Profile"
+    onSurfaceVariant = TextSecondary,
 
-    outline = OutlineSoft,
-    primaryContainer = GreenPrimaryLight,
-    onPrimaryContainer = Color.Black,
-    secondaryContainer = GreenSecondaryLight,
-    onSecondaryContainer = Color.Black,
-    tertiaryContainer = TertiaryContainer,
-    onTertiaryContainer = OnTertiaryContainer,
+    // Containers (Target)
+    tertiaryContainer = TargetCard, // bloc "Target" (Bonus)
+    onTertiaryContainer = TextPrimary,
+
+    // Outline / dividers
+    outline = DividerGreen,
+    primaryContainer = AccentGreen,         // fallback
+    onPrimaryContainer = Color.White,
+    secondaryContainer = AccentGreen,       // fallback
+    onSecondaryContainer = Color.White,
 )
 
 private val DarkColors: ColorScheme = darkColorScheme(
-    primary = GreenPrimaryLight,
+    // Brand / Accents
+    primary = AccentGreen,
     onPrimary = Color.Black,
-    secondary = GreenSecondaryLight,
+    secondary = AccentGreen,
     onSecondary = Color.Black,
-    tertiary = GreenSecondary,
-    onTertiary = Color.White,
+    tertiary = AccentGreen,
 
-    background = Color(0xFF0F1512),
-    onBackground = Color.White,
-    surface = Color(0xFF0F1512),
-    onSurface = Color.White,
+    // Background / Surface
+    background = DarkBackground,    // fond global sombre (ton vert très foncé)
+    onBackground = TextPrimary,
+    surface = DarkBackground,
+    onSurface = TextPrimary,
 
-    surfaceVariant = Color(0xFF1C2A22),
-    onSurfaceVariant = Color(0xFFBFD7C8),
+    // Surfaces spécifiques
+    surfaceVariant = WeaponCard,    // carte "Weapon Profile"
+    onSurfaceVariant = TextSecondary,
 
-    outline = Color(0xFF3B5345),
-    primaryContainer = GreenPrimary,
-    onPrimaryContainer = Color.White,
-    secondaryContainer = GreenSecondary,
-    onSecondaryContainer = Color.White,
-    tertiaryContainer = Color(0xFF254C3B),
-    onTertiaryContainer = Color(0xFFCCF1DA),
+    // Containers (Target)
+    tertiaryContainer = TargetCard, // bloc "Target" (Bonus)
+    onTertiaryContainer = TextPrimary,
+
+    // Outline
+    outline = DividerGreen,
+
+    // Containers complémentaires (fallbacks)
+    primaryContainer = UnitCard,        // carte "Unit" (le plus sombre)
+    onPrimaryContainer = TextPrimary,
+    secondaryContainer = WeaponCard,
+    onSecondaryContainer = TextPrimary,
 )
 
-// ===========================
-// Thème SamoHammer (Material 3)
-// ===========================
+/**
+ * Thème SamoHammer (Material 3) aligné sur Color.kt (nouveaux noms).
+ */
 @Composable
 fun SamoHammerTheme(
     darkTheme: Boolean = isSystemInDarkTheme(),
@@ -76,7 +95,7 @@ fun SamoHammerTheme(
 ) {
     val colors = if (darkTheme) DarkColors else LightColors
 
-    // Optionnel : teinter la status/navigation bar
+    // (Optionnel) teinter status/navigation bar pour coller au thème
     val view = LocalView.current
     if (!view.isInEditMode && Build.VERSION.SDK_INT >= Build.VERSION_CODES.LOLLIPOP) {
         (view.context as? Activity)?.window?.statusBarColor = colors.primary.toArgb()
@@ -85,7 +104,7 @@ fun SamoHammerTheme(
 
     MaterialTheme(
         colorScheme = colors,
-        // Pas de fichier Typography.kt requis : on passe simplement une instance M3 par défaut
+        // Pas de fichier Typography.kt requis : instance M3 par défaut
         typography = Typography(),
         content = content
     )
