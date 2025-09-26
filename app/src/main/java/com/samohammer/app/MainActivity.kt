@@ -1,13 +1,8 @@
-// V2.2.0 — Toggle Bonus (UI-only) via pop-in + Bonus tab en lecture seule
-// - Profils: supprime la case "Bonus" introduite en 2.1.8. Ajoute un bouton "Toggle Bonus" par profil.
-//   • Clic → ouvre une AlertDialog "<UnitName> – <ProfileName>" avec cases : +1 Hit, +1 Wound,
-//     +1 Atk (cochable 2 fois), +1 Rend, +1 Dmg. Boutons Annuler / Valider.
-//   • Si au moins un bonus est sélectionné, le bouton devient "Toggle Bonus ✓" (état visuel).
-// - Bonus: lecture seule. Affiche TOUTES les unités actives (max 6) et TOUS leurs profils actifs.
-//   • Sous "Conditionnal Bonus — <UnitName>" (avec "Target" à droite), on liste chaque profil et
-//     on résume les bonus cochés (ex: "+1 Hit, +1 Atk x2"). S'il n'y a rien: "—".
-//   • La colonne Target (Ward, -1 Hit, -1 Wound) reste fonctionnelle et GLOBALE (moteur inchangé).
-// - Conserve 2.1.7: polish UI, labels au-dessus, champs numériques centrés, Ward compact, AoA persisté.
+// V2.2.2 — Cap ±1 Hit/Wound + nouveaux debuffs Target (-1 Rend, -1 Atk, -1 Dmg)
+// - Cap moteur: on somme AoA / +1 Hit / -1 Hit (Target) puis on borne à [-1,+1] pour Hit; idem Wound (avec +1 Wound).
+// - Bonus tab: ajoute Target toggles globaux -1 Rend, -1 Atk, -1 Dmg (UI-only mais appliqués au moteur).
+// - Pas de nouvelle persistance : nouveaux champs ajoutés au UI model seulement.
+// - Conserve la pop-in “Toggle Bonus” par profil (UI-only) et le résumé read-only dans l’onglet Bonus.
 
 package com.samohammer.app
 
@@ -112,10 +107,10 @@ data class AttackProfile(
     val autoW: Boolean = false,
     val mortal: Boolean = false,
     val aoa: Boolean = false, // persisté via mapping
-    // --- NEW: bonus UI-only (non persisté) ---
+    // Bonus UI-only (non persistés)
     val bonusHit: Boolean = false,
     val bonusWound: Boolean = false,
-    val bonusAtk: Int = 0,       // 0..2
+    val bonusAtk: Int = 0,       // 0..2 (ajout d’attaques)
     val bonusRend: Boolean = false,
     val bonusDmg: Boolean = false
 )
@@ -129,11 +124,15 @@ data class UnitEntry(
 data class TargetConfig(
     val wardNeeded: Int = 0,
     val debuffHitEnabled: Boolean = false,
-    val debuffHitValue: Int = 1
+    val debuffHitValue: Int = 1,
+    // NEW: debuffs globaux Target (UI-only)
+    val debuffRendEnabled: Boolean = false, // rend -1 (affaiblit l’AP)
+    val debuffAtkEnabled: Boolean = false,  // -1 attaque (min 0)
+    val debuffDmgEnabled: Boolean = false   // -1 damage (min 0)
 )
 
 /* =========================
-   Moteur (AoA inclus)
+   Moteur (AoA + Bonus + debuffs Target)
    ========================= */
 private fun clamp2to6(x: Int) = x.coerceIn(2, 6)
 
@@ -143,9 +142,18 @@ private fun pGate(needed: Int): Double = when {
     else -> (7 - needed) / 6.0
 }
 
-private fun effectiveHitThreshold(baseNeeded: Int, debuff: Int, aoa: Boolean): Int {
-    val buff = if (aoa) -1 else 0
-    return clamp2to6(baseNeeded + debuff + buff) // min 2+, max 6+
+// Cap ±1 sur Hit (par rapport au profil de base)
+private fun effectiveHitWithCap(baseToHit: Int, aoa: Boolean, bonusHit: Boolean, targetDebuffHit: Int): Int {
+    val sum = (if (aoa) -1 else 0) + (if (bonusHit) -1 else 0) + targetDebuffHit
+    val capped = sum.coerceIn(-1, 1)
+    return clamp2to6(baseToHit + capped)
+}
+
+// Cap ±1 sur Wound (par rapport au profil de base)
+private fun effectiveWoundWithCap(baseToWound: Int, bonusWound: Boolean): Int {
+    val sum = (if (bonusWound) -1 else 0)
+    val capped = sum.coerceIn(-1, 1)
+    return clamp2to6(baseToWound + capped)
 }
 
 private fun pHitNonSix(effNeeded: Int): Double {
@@ -169,24 +177,51 @@ private fun wardFactor(wardNeeded: Int): Double {
 
 private fun expectedDamageForProfile(p: AttackProfile, target: TargetConfig, baseSave: Int?): Double {
     if (!p.active) return 0.0
-    val attacks = max(p.models, 0) * max(p.attacks, 0)
-    if (attacks == 0) return 0.0
 
-    val debuff = if (target.debuffHitEnabled) target.debuffHitValue else 0
-    val effHit = effectiveHitThreshold(p.toHit, debuff, p.aoa)
+    // ---- Valeurs effectives (bonus profil + debuffs Target) ----
+    val extraAttacks = p.bonusAtk + (if (target.debuffAtkEnabled) -1 else 0)
+    val effAttacksStat = (p.attacks + extraAttacks).coerceAtLeast(0)
+    val totalAttacks = max(p.models, 0) * effAttacksStat
+    if (totalAttacks == 0) return 0.0
 
+    val targetDebuffHit = if (target.debuffHitEnabled) target.debuffHitValue else 0
+    val effHit = effectiveHitWithCap(
+        baseToHit = p.toHit,
+        aoa = p.aoa,
+        bonusHit = p.bonusHit,
+        targetDebuffHit = targetDebuffHit
+    )
+
+    val effWound = effectiveWoundWithCap(
+        baseToWound = p.toWound,
+        bonusWound = p.bonusWound
+    )
+
+    val effRend = p.rend +
+        (if (p.bonusRend) 1 else 0) +
+        (if (target.debuffRendEnabled) -1 else 0)
+
+    val effDamage = (p.damage +
+        (if (p.bonusDmg) 1 else 0) +
+        (if (target.debuffDmgEnabled) -1 else 0)).coerceAtLeast(0)
+
+    // ---- Probabilités ----
     val p6 = 1.0 / 6.0
     val phNon6 = pHitNonSix(effHit)
-    val pw = pWound(p.toWound)
-    val pu = pUnsaved(baseSave, p.rend)
+    val pw = pWound(effWound)
+    val pu = pUnsaved(baseSave, effRend)
     val ward = wardFactor(target.wardNeeded)
 
-    val evNon6 = phNon6 * pw * pu * p.damage
+    // ---- EV hors 6 (pas d'effet spécial) ----
+    val evNon6 = phNon6 * pw * pu * effDamage
+
+    // ---- EV sur 6 au jet pour toucher ----
     val mult6 = if (p.twoHits) 2.0 else 1.0
     val pw6 = if (p.mortal || p.autoW) 1.0 else pw
     val pu6 = if (p.mortal) 1.0 else pu
-    val ev6 = p6 * mult6 * pw6 * pu6 * p.damage
-    return attacks * (evNon6 + ev6) * ward
+    val ev6 = p6 * mult6 * pw6 * pu6 * effDamage
+
+    return totalAttacks * (evNon6 + ev6) * ward
 }
 
 private fun expectedDamageForUnit(u: UnitEntry, target: TargetConfig, baseSave: Int?): Double {
@@ -242,7 +277,7 @@ private fun TopLabeledCheckbox(
 }
 
 /* =========================
-   Onglet Bonus — lecture seule (résumé par profil) + Target global
+   Onglet Bonus — read-only résumé + Target global (avec nouveaux debuffs)
    ========================= */
 @Composable
 fun BonusTab(units: List<UnitEntry>, target: TargetConfig, onUpdate: (TargetConfig) -> Unit) {
@@ -292,7 +327,7 @@ fun BonusTab(units: List<UnitEntry>, target: TargetConfig, onUpdate: (TargetConf
                         Divider()
                     }
 
-                    // Colonne Target (contrôles globaux — fonctionnels)
+                    // Colonne Target (globale — moteur)
                     Row(
                         modifier = Modifier.fillMaxWidth(),
                         horizontalArrangement = Arrangement.End
@@ -340,7 +375,31 @@ fun BonusTab(units: List<UnitEntry>, target: TargetConfig, onUpdate: (TargetConf
                                 }
                             )
 
-                            var debuffWound by remember { mutableStateOf(false) } // UI-only (pas moteur)
+                            // NEW debuffs Target
+                            TopLabeledCheckbox(
+                                label = "-1 Rend",
+                                checked = target.debuffRendEnabled,
+                                onCheckedChange = { enabled ->
+                                    onUpdate(target.copy(debuffRendEnabled = enabled))
+                                }
+                            )
+                            TopLabeledCheckbox(
+                                label = "-1 Atk",
+                                checked = target.debuffAtkEnabled,
+                                onCheckedChange = { enabled ->
+                                    onUpdate(target.copy(debuffAtkEnabled = enabled))
+                                }
+                            )
+                            TopLabeledCheckbox(
+                                label = "-1 Dmg",
+                                checked = target.debuffDmgEnabled,
+                                onCheckedChange = { enabled ->
+                                    onUpdate(target.copy(debuffDmgEnabled = enabled))
+                                }
+                            )
+
+                            // -1 Wound (toujours UI-only pour l’instant)
+                            var debuffWound by remember { mutableStateOf(false) }
                             TopLabeledCheckbox(
                                 label = "-1 Wound",
                                 checked = debuffWound,
@@ -385,11 +444,10 @@ fun ProfilesTab(units: List<UnitEntry>, onUpdateUnits: (List<UnitEntry>) -> Unit
                             }
                         )
 
-                        // Unit name: commit-on-blur
                         var unitNameText by remember(unit.name) { mutableStateOf(unit.name) }
                         OutlinedTextField(
                             value = unitNameText,
-                            onValueChange = { unitNameText = it }, // local-only
+                            onValueChange = { unitNameText = it },
                             label = { Text("Unit") },
                             singleLine = true,
                             modifier = Modifier
@@ -404,11 +462,11 @@ fun ProfilesTab(units: List<UnitEntry>, onUpdateUnits: (List<UnitEntry>) -> Unit
                         )
 
                         Spacer(Modifier.width(6.dp))
-                        TextButton(onClick = { /* le toggle type est par profil */ }) { Text("Type") }
+                        TextButton(onClick = { /* type toggle is per profile */ }) { Text("Type") }
                         TextButton(onClick = { expanded = !expanded }) { Text(if (expanded) "▼" else "▶") }
                     }
 
-                    // Actions unité: Add à gauche, Delete totalement à droite
+                    // Actions unité
                     Row(
                         modifier = Modifier.fillMaxWidth(),
                         verticalAlignment = Alignment.CenterVertically,
@@ -482,7 +540,6 @@ private fun ProfileEditor(
 ) {
     ElevatedCard(Modifier.fillMaxWidth()) {
         var expanded by rememberSaveable(profile.hashCode()) { mutableStateOf(true) }
-        // Dialog state for "Toggle Bonus"
         var showBonusDialog by remember(profile.hashCode()) { mutableStateOf(false) }
 
         Column(
@@ -500,11 +557,10 @@ private fun ProfileEditor(
                     onCheckedChange = { ok -> onChange(profile.copy(active = ok)) }
                 )
 
-                // Profile name: commit-on-blur — élargi visuellement
                 var profileNameText by remember(profile.name) { mutableStateOf(profile.name) }
                 OutlinedTextField(
                     value = profileNameText,
-                    onValueChange = { profileNameText = it }, // local-only
+                    onValueChange = { profileNameText = it },
                     label = { Text("Weapon Profile") },
                     singleLine = true,
                     modifier = Modifier
@@ -542,13 +598,11 @@ private fun ProfileEditor(
             }
 
             if (expanded) {
-                // SpaceBetween : pousse la colonne de droite au bord
                 Row(
                     modifier = Modifier.fillMaxWidth(),
                     horizontalArrangement = Arrangement.SpaceBetween,
                     verticalAlignment = Alignment.Top
                 ) {
-                    // Colonne gauche : champs numériques (labels au-dessus, case centrée visuellement)
                     Column(
                         verticalArrangement = Arrangement.spacedBy(10.dp),
                         modifier = Modifier.weight(1f)
@@ -595,7 +649,6 @@ private fun ProfileEditor(
                         }
                     }
 
-                    // Colonne droite : flags evergreen
                     Column(
                         verticalArrangement = Arrangement.spacedBy(12.dp),
                         horizontalAlignment = Alignment.End,
@@ -630,7 +683,7 @@ private fun ProfileEditor(
             }
         }
 
-        // --- AlertDialog: Toggle Bonus ---
+        // --- AlertDialog: Toggle Bonus (UI-only) ---
         if (showBonusDialog) {
             var tempHit by remember { mutableStateOf(profile.bonusHit) }
             var tempWound by remember { mutableStateOf(profile.bonusWound) }
@@ -649,7 +702,6 @@ private fun ProfileEditor(
                         Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.SpaceBetween, modifier = Modifier.fillMaxWidth()) {
                             Text("+1 Wound"); Switch(checked = tempWound, onCheckedChange = { tempWound = it })
                         }
-                        // +1 Atk (0..2) — deux crans
                         Column {
                             Text("+1 Atk (x${tempAtk})")
                             Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
@@ -824,6 +876,7 @@ private fun TargetConfig.toDomain(): com.samohammer.app.model.TargetConfig =
         wardNeeded = this.wardNeeded,
         debuffHitEnabled = this.debuffHitEnabled,
         debuffHitValue = this.debuffHitValue
+        // debuffRendEnabled / debuffAtkEnabled / debuffDmgEnabled: UI-only -> non persistés
     )
 
 private fun com.samohammer.app.model.TargetConfig.toUi(): TargetConfig =
@@ -831,6 +884,7 @@ private fun com.samohammer.app.model.TargetConfig.toUi(): TargetConfig =
         wardNeeded = this.wardNeeded,
         debuffHitEnabled = this.debuffHitEnabled,
         debuffHitValue = this.debuffHitValue
+        // nouveaux champs UI-only initialisés à false par défaut
     )
 
 private fun com.samohammer.app.model.AttackProfile.toUi(): AttackProfile =
