@@ -1,6 +1,9 @@
-// V2.2.9 — Fix crash Simulation
-// - SimulationTab : early-return propre quand aucune unité active (plus de return@Column).
-// - Le reste identique à V2.2.8.
+// V2.3.0 — Palette verte + contraste cartes
+// - Ajoute un contraste visuel net entre les cartes :
+//   * Carte Unité (ProfilesTab)      -> surfaceVariant (vert/gris léger)
+//   * Carte Weapon Profile (éditeur)  -> surface (blanc)
+//   * Carte Target (onglet Bonus)     -> tertiaryContainer (vert pâle dédié)
+// - Aucun changement de logique ou d’ergonomie par rapport à V2.2.9.
 
 package com.samohammer.app
 
@@ -375,9 +378,14 @@ fun BonusTab(units: List<UnitEntry>, target: TargetConfig, onUpdate: (TargetConf
         modifier = Modifier.fillMaxSize().padding(16.dp),
         verticalArrangement = Arrangement.spacedBy(16.dp)
     ) {
-        // 1) Target en haut
+        // 1) Target en haut — CONTRASTE: tertiaryContainer
         item {
-            ElevatedCard(Modifier.fillMaxWidth()) {
+            ElevatedCard(
+                colors = CardDefaults.elevatedCardColors(
+                    containerColor = MaterialTheme.colorScheme.tertiaryContainer
+                ),
+                modifier = Modifier.fillMaxWidth()
+            ) {
                 Column(
                     modifier = Modifier.padding(16.dp),
                     verticalArrangement = Arrangement.spacedBy(12.dp)
@@ -513,7 +521,12 @@ fun ProfilesTab(units: List<UnitEntry>, onUpdateUnits: (List<UnitEntry>) -> Unit
         verticalArrangement = Arrangement.spacedBy(12.dp)
     ) {
         itemsIndexed(units) { unitIndex, unit ->
-            ElevatedCard {
+            // CONTRASTE: carte Unité = surfaceVariant
+            ElevatedCard(
+                colors = CardDefaults.elevatedCardColors(
+                    containerColor = MaterialTheme.colorScheme.surfaceVariant
+                )
+            ) {
                 var expanded by rememberSaveable(unitIndex) { mutableStateOf(true) }
                 Column(
                     modifier = Modifier.fillMaxWidth().padding(12.dp),
@@ -628,7 +641,13 @@ private fun ProfileEditor(
     onRemove: () -> Unit,
     onCommitProfileName: (String) -> Unit
 ) {
-    ElevatedCard(Modifier.fillMaxWidth()) {
+    // CONTRASTE: carte Weapon Profile = surface (blanc)
+    ElevatedCard(
+        colors = CardDefaults.elevatedCardColors(
+            containerColor = MaterialTheme.colorScheme.surface
+        ),
+        modifier = Modifier.fillMaxWidth()
+    ) {
         var expanded by rememberSaveable(profile.hashCode()) { mutableStateOf(true) }
         var showBonusDialog by remember(profile.hashCode()) { mutableStateOf(false) }
 
