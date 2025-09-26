@@ -2,28 +2,36 @@ package com.samohammer.app.ui.theme
 
 import androidx.compose.ui.graphics.Color
 
-// 🌑 Background global
-val DarkBackground = Color(0xFF0A0F0A)  // fond général (presque noir vert)
+/**
+ * Palette claire — contraste renforcé
+ * - Fond général clair
+ * - Cartes hiérarchisées en nuances de gris (Unit un peu plus foncé que Weapon)
+ * - Target légèrement teinté vert très pâle pour ressortir sans crier
+ * - Actions (boutons, switches ON, FAB) conservent le vert
+ *
+ * NOTE: Les noms sont inchangés pour rester 100% compatibles avec ton Theme.kt actuel.
+ */
 
-// 🟩 Blocs principaux
-val UnitCard = Color(0xFF122112)        // Unit : vert sombre
-val WeaponCard = Color(0xFF1C331C)      // Weapon Profile : vert moyen
-val TargetCard = Color(0xFF274427)      // Target : vert clair profond
+// 🌑 (utilisé seulement en mode sombre par Theme.kt)
+val DarkBackground = Color(0xFF0A0F0A)
 
-// ✍️ Texte
-val TextPrimary = Color(0xFFE6FFE6)     // texte principal (très clair, lisible)
-val TextSecondary = Color(0xFFA0C0A0)   // texte secondaire (vert gris clair)
+// 🟩 Actions / Accents (conservés)
+val AccentGreen   = Color(0xFF43A047) // boutons primaires, switch ON, FAB
+val DividerGreen  = Color(0xFFE0E0E0) // lignes/outline (gris clair en thème clair)
 
-// 🎯 Accent & actions
-val AccentGreen = Color(0xFF43A047)     // boutons, onglets actifs, coches actives
-val CheckboxGreen = AccentGreen         // pour cohérence (coche, +)
-val DividerGreen = Color(0xFF2E7D32)    // séparateurs, lignes fines
+// ✍️ Texte (thème clair)
+val TextPrimary   = Color(0xFF111111) // texte principal
+val TextSecondary = Color(0xFF616161) // labels/hints
 
-// 💾 Anciennes refs (si jamais utilisées encore dans Theme.kt)
-val Purple80 = Color(0xFFD0BCFF)
-val PurpleGrey80 = Color(0xFFCCC2DC)
-val Pink80 = Color(0xFFEFB8C8)
+// 🧱 Surfaces (thème clair)
+val UnitCard      = Color(0xFFE9ECEA) // bloc Unit : gris très clair, un cran plus foncé
+val WeaponCard    = Color(0xFFF4F6F5) // bloc Weapon Profile : gris encore plus clair
+val TargetCard    = Color(0xFFEEF7F0) // bloc Target : gris/vert très pâle, lisible et distinct
 
-val Purple40 = Color(0xFF6650a4)
-val PurpleGrey40 = Color(0xFF625b71)
-val Pink40 = Color(0xFF7D5260)
+// ---------- (anciens alias non utilisés dans Theme.kt actuel, laissés pour compat éventuelle) ----------
+val Purple80      = Color(0xFFD0BCFF)
+val PurpleGrey80  = Color(0xFFCCC2DC)
+val Pink80        = Color(0xFFEFB8C8)
+val Purple40      = Color(0xFF6650A4)
+val PurpleGrey40  = Color(0xFF625B71)
+val Pink40        = Color(0xFF7D5260)
