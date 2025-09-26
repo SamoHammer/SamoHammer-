@@ -1,7 +1,6 @@
-// V2.2.8 — Build fix
-// - Corrige tous les appels à TopLabeledCheckbox (arguments nommés + onCheckedChange explicite).
-// - Corrige la typo moteur: pHitNonSix() (plus de phNonSix).
-// - Conserve tout le reste de V2.2.7 (Target en haut, 2×2 checkboxes, cold start noms vides, cap ±1, mins, etc.).
+// V2.2.9 — Fix crash Simulation
+// - SimulationTab : early-return propre quand aucune unité active (plus de return@Column).
+// - Le reste identique à V2.2.8.
 
 package com.samohammer.app
 
@@ -896,24 +895,33 @@ private fun GateField2to6Centered(
 }
 
 /* =========================
-   Simulation
+   Simulation (early return si 0 unité active)
    ========================= */
 @Composable
 fun SimulationTab(units: List<UnitEntry>, target: TargetConfig) {
     val activeUnits = units.filter { it.active }.take(6)
+
+    // ---- NO-CRASH: si aucune unité, on sort avant de construire le tableau ----
+    if (activeUnits.isEmpty()) {
+        Box(
+            modifier = Modifier.fillMaxSize(),
+            contentAlignment = Alignment.Center
+        ) { Text("No active unit.") }
+        return
+    }
+
     Column(
         modifier = Modifier.fillMaxSize().padding(16.dp),
         verticalArrangement = Arrangement.spacedBy(8.dp)
     ) {
         Text("Damage expectation by Save (per active unit, max 6)", style = MaterialTheme.typography.titleMedium)
-        if (activeUnits.isEmpty()) {
-            Spacer(Modifier.height(8.dp)); Text("No active unit."); return@Column
-        }
+
         Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(12.dp)) {
             Text("Save", modifier = Modifier.width(70.dp))
             activeUnits.forEach { u -> Text(u.name.ifBlank { " " }, modifier = Modifier.weight(1f), maxLines = 1) }
         }
         Divider()
+
         val saves = listOf<Int?>(2, 3, 4, 5, 6, null)
         saves.forEach { save ->
             Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(12.dp)) {
