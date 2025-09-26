@@ -2,28 +2,64 @@ package com.samohammer.app.ui.theme
 
 import androidx.compose.ui.graphics.Color
 
-// === Palette verte (Material-ish) ===
-val GreenPrimary       = Color(0xFF2E7D32)  // emerald 700
-val GreenPrimaryDark   = Color(0xFF1B5E20)  // emerald 900
-val GreenPrimaryLight  = Color(0xFF66BB6A)  // emerald 400
+/**
+ * Palette SamoHammer — Vert contrasté
+ *
+ * Règles :
+ * - Texte principal en gris clair sur fonds sombres -> lisibilité ++
+ * - Cartes Unité / Profil / Target : nuances de vert différentes pour la hiérarchie
+ * - Vert accent uniquement pour les actions (switch ON, FAB, boutons primaires)
+ *
+ * NB: Les noms ci-dessous sont ceux attendus par Theme.kt — ne pas renommer.
+ */
 
-val GreenSecondary     = Color(0xFF00796B)  // teal 700
-val GreenSecondaryLight= Color(0xFF26A69A)  // teal 400
-val GreenSecondaryDark = Color(0xFF004D40)  // teal 900
+// ---------- Accents / Brand ----------
+val GreenPrimary       = Color(0xFF2E7D32) // vert principal (boutons, app bar dark)
+val GreenPrimaryLight  = Color(0xFF66BB6A) // variante claire (switch ON, accents)
+val GreenSecondary     = Color(0xFF1B5E20) // secondaire (hover/états, tags)
+val GreenSecondaryLight= Color(0xFF43A047) // secondaire clair (icônes actives)
 
-// Surfaces / containers
-val SurfaceVariant         = Color(0xFFE8F3EB) // léger vert/gris
-val OnSurfaceVariant       = Color(0xFF274233)
+// ---------- Surfaces (fonds et cartes) ----------
+val SurfaceRootDark    = Color(0xFF0F1512) // fond global très sombre (écran)
+val SurfaceCardUnit    = Color(0xFF14211B) // carte Unité (plus sombre)
+val SurfaceCardProfile = Color(0xFF1A2B22) // carte Weapon Profile (un cran plus clair)
+val SurfaceCardTarget  = Color(0xFF20352A) // carte Target (encore un cran plus clair pour la mettre en avant)
 
-val TertiaryContainer      = Color(0xFFDDF3E2) // pour carte Target
-val OnTertiaryContainer    = Color(0xFF1F3A2C)
+val SurfaceVariant     = SurfaceCardProfile // utilisé par Theme.kt (profils)
+val TertiaryContainer  = SurfaceCardTarget  // utilisé par Theme.kt (target, containers)
 
-val OutlineSoft            = Color(0xFFB5C9BD)
+// ---------- Texte / Icônes ----------
+val OnSurfacePrimary   = Color(0xFFE6EAE7) // texte principal sur fonds sombres
+val OnSurfaceSecondary = Color(0xFFBFD7C8) // texte secondaire (labels, hints)
+val OnSurfaceMuted     = Color(0xFF8BA798) // informations faibles
 
-// Garde tes tokens existants pour éviter les "unresolved reference" ailleurs
-object SamoTokens {
-    val ShootHeader = Color(0xFF2F6FED)
-    val MeleeHeader = Color(0xFFD05050)
-    val ShootTint   = Color(0xFFE7EFFF)
-    val MeleeTint   = Color(0xFFF9E7E7)
-}
+val OnSurfaceVariant   = OnSurfaceSecondary // utilisé par Theme.kt
+val OnTertiaryContainer= OnSurfacePrimary   // texte sur TertiaryContainer
+
+// ---------- Bordures / Dividers ----------
+val OutlineSoft        = Color(0xFF325043) // bordures discrètes sur cartes
+
+// ---------- Optionnels (si besoin plus tard) ----------
+val ErrorRed           = Color(0xFFEF5350)
+val WarningAmber       = Color(0xFFFFB300)
+val InfoBlue           = Color(0xFF64B5F6)
+val SuccessGreen       = GreenPrimaryLight
+
+/**
+ * Helpers (si tu veux accéder facilement à des couleurs de texte cohérentes).
+ * Non utilisés par Theme.kt directement, mais utiles côté UI si besoin.
+ */
+val TextPrimary   = OnSurfacePrimary
+val TextSecondary = OnSurfaceSecondary
+val TextMuted     = OnSurfaceMuted
+
+/**
+ * Reco d’usage (non bloquant) :
+ * - Fond écran: SurfaceRootDark
+ * - Carte Unité: SurfaceCardUnit
+ * - Carte Profil: SurfaceCardProfile
+ * - Carte Target: SurfaceCardTarget
+ * - Bouton primaire / FAB / switch ON: GreenPrimaryLight
+ * - Bordures cartes: OutlineSoft
+ * - Textes principaux: TextPrimary, secondaires: TextSecondary
+ */
