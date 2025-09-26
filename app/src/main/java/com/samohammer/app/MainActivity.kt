@@ -1,8 +1,15 @@
-// V2.2.2 — Cap ±1 Hit/Wound + nouveaux debuffs Target (-1 Rend, -1 Atk, -1 Dmg)
-// - Cap moteur: on somme AoA / +1 Hit / -1 Hit (Target) puis on borne à [-1,+1] pour Hit; idem Wound (avec +1 Wound).
-// - Bonus tab: ajoute Target toggles globaux -1 Rend, -1 Atk, -1 Dmg (UI-only mais appliqués au moteur).
-// - Pas de nouvelle persistance : nouveaux champs ajoutés au UI model seulement.
-// - Conserve la pop-in “Toggle Bonus” par profil (UI-only) et le résumé read-only dans l’onglet Bonus.
+// V2.2.2 — Cap ±1 Hit/Wound + debuffs Target (-1 Rend / -1 Atk / -1 Dmg / -1 Wound) BRANCHÉS
+// - Moteur :
+//   • Hit = baseToHit + clamp( (AoA?-1:0) + (+1Hit?-1:0) + (target -1Hit ? +debuffHitValue : 0), -1, +1 ), borné 2..6
+//   • Wound = baseToWound + clamp( (+1Wound?-1:0) + (target -1Wound ? +1 : 0), -1, +1 ), borné 2..6
+//   • Attacks = max(0, attacks + bonusAtk - (target -1Atk ? 1 : 0)); totalAttacks = models * Attacks
+//   • Rend = rend + (bonus +1Rend ? +1 : 0) + (target -1Rend ? -1 : 0)
+//   • Damage = max(0, damage + (bonus +1Dmg ? +1 : 0) - (target -1Dmg ? 1 : 0))
+//   • Ward comme avant (2..6); traits spéciaux inchangés (twoHits, autoW, mortal).
+// - UI :
+//   • Onglet Bonus → colonne Target : ajoute les cases -1 Rend, -1 Atk, -1 Dmg, et branche -1 Wound (désormais pris en compte par le moteur).
+//   • Onglet Profils → pop-in “Toggle Bonus” inchangée (UI-only mais maintenant tout impacte la simu).
+// - Persistance : on NE persiste pas les nouveaux toggles Target ni les bonus de la pop-in; seuls ward/debuffHit restent persistés.
 
 package com.samohammer.app
 
@@ -77,7 +84,7 @@ class MainActivity : ComponentActivity() {
                             }
                             1 -> BonusTab(units, target) { t ->
                                 target = t
-                                appStateVM.updateTarget(t.toDomain())
+                                appStateVM.updateTarget(t.toDomain()) // seuls ward/debuffHit sont persistés
                             }
                             2 -> SimulationTab(units, target)
                         }
@@ -125,14 +132,15 @@ data class TargetConfig(
     val wardNeeded: Int = 0,
     val debuffHitEnabled: Boolean = false,
     val debuffHitValue: Int = 1,
-    // NEW: debuffs globaux Target (UI-only)
-    val debuffRendEnabled: Boolean = false, // rend -1 (affaiblit l’AP)
-    val debuffAtkEnabled: Boolean = false,  // -1 attaque (min 0)
-    val debuffDmgEnabled: Boolean = false   // -1 damage (min 0)
+    // Debuffs Target UI-only (non persistés) — BRANCHÉS moteur
+    val debuffWoundEnabled: Boolean = false, // +1 to wound threshold (dégrade)
+    val debuffRendEnabled: Boolean = false,  // -1 sur le rend effectif (affaiblit l’AP)
+    val debuffAtkEnabled: Boolean = false,   // -1 attaque (min 0)
+    val debuffDmgEnabled: Boolean = false    // -1 damage (min 0)
 )
 
 /* =========================
-   Moteur (AoA + Bonus + debuffs Target)
+   Moteur (AoA + Bonus + Debuffs Target + Cap ±1)
    ========================= */
 private fun clamp2to6(x: Int) = x.coerceIn(2, 6)
 
@@ -150,8 +158,8 @@ private fun effectiveHitWithCap(baseToHit: Int, aoa: Boolean, bonusHit: Boolean,
 }
 
 // Cap ±1 sur Wound (par rapport au profil de base)
-private fun effectiveWoundWithCap(baseToWound: Int, bonusWound: Boolean): Int {
-    val sum = (if (bonusWound) -1 else 0)
+private fun effectiveWoundWithCap(baseToWound: Int, bonusWound: Boolean, targetDebuffWound: Boolean): Int {
+    val sum = (if (bonusWound) -1 else 0) + (if (targetDebuffWound) +1 else 0)
     val capped = sum.coerceIn(-1, 1)
     return clamp2to6(baseToWound + capped)
 }
@@ -194,7 +202,8 @@ private fun expectedDamageForProfile(p: AttackProfile, target: TargetConfig, bas
 
     val effWound = effectiveWoundWithCap(
         baseToWound = p.toWound,
-        bonusWound = p.bonusWound
+        bonusWound = p.bonusWound,
+        targetDebuffWound = target.debuffWoundEnabled
     )
 
     val effRend = p.rend +
@@ -202,8 +211,8 @@ private fun expectedDamageForProfile(p: AttackProfile, target: TargetConfig, bas
         (if (target.debuffRendEnabled) -1 else 0)
 
     val effDamage = (p.damage +
-        (if (p.bonusDmg) 1 else 0) +
-        (if (target.debuffDmgEnabled) -1 else 0)).coerceAtLeast(0)
+        (if (p.bonusDmg) 1 else 0) -
+        (if (target.debuffDmgEnabled) 1 else 0)).coerceAtLeast(0)
 
     // ---- Probabilités ----
     val p6 = 1.0 / 6.0
@@ -277,7 +286,7 @@ private fun TopLabeledCheckbox(
 }
 
 /* =========================
-   Onglet Bonus — read-only résumé + Target global (avec nouveaux debuffs)
+   Onglet Bonus — read-only résumé + Target global (branché)
    ========================= */
 @Composable
 fun BonusTab(units: List<UnitEntry>, target: TargetConfig, onUpdate: (TargetConfig) -> Unit) {
@@ -327,7 +336,7 @@ fun BonusTab(units: List<UnitEntry>, target: TargetConfig, onUpdate: (TargetConf
                         Divider()
                     }
 
-                    // Colonne Target (globale — moteur)
+                    // Colonne Target (globale — branchée)
                     Row(
                         modifier = Modifier.fillMaxWidth(),
                         horizontalArrangement = Arrangement.End
@@ -375,7 +384,14 @@ fun BonusTab(units: List<UnitEntry>, target: TargetConfig, onUpdate: (TargetConf
                                 }
                             )
 
-                            // NEW debuffs Target
+                            // Debuffs Target BRANCHÉS
+                            TopLabeledCheckbox(
+                                label = "-1 Wound",
+                                checked = target.debuffWoundEnabled,
+                                onCheckedChange = { enabled ->
+                                    onUpdate(target.copy(debuffWoundEnabled = enabled))
+                                }
+                            )
                             TopLabeledCheckbox(
                                 label = "-1 Rend",
                                 checked = target.debuffRendEnabled,
@@ -396,14 +412,6 @@ fun BonusTab(units: List<UnitEntry>, target: TargetConfig, onUpdate: (TargetConf
                                 onCheckedChange = { enabled ->
                                     onUpdate(target.copy(debuffDmgEnabled = enabled))
                                 }
-                            )
-
-                            // -1 Wound (toujours UI-only pour l’instant)
-                            var debuffWound by remember { mutableStateOf(false) }
-                            TopLabeledCheckbox(
-                                label = "-1 Wound",
-                                checked = debuffWound,
-                                onCheckedChange = { debuffWound = it }
                             )
                         }
                     }
@@ -871,12 +879,12 @@ fun SimulationTab(units: List<UnitEntry>, target: TargetConfig) {
 /* =========================
    Mapping UI <-> Domain
    ========================= */
+// Seuls ward/debuffHit sont persistés; le reste des toggles Target et les bonus profil sont UI-only.
 private fun TargetConfig.toDomain(): com.samohammer.app.model.TargetConfig =
     com.samohammer.app.model.TargetConfig(
         wardNeeded = this.wardNeeded,
         debuffHitEnabled = this.debuffHitEnabled,
         debuffHitValue = this.debuffHitValue
-        // debuffRendEnabled / debuffAtkEnabled / debuffDmgEnabled: UI-only -> non persistés
     )
 
 private fun com.samohammer.app.model.TargetConfig.toUi(): TargetConfig =
@@ -884,7 +892,7 @@ private fun com.samohammer.app.model.TargetConfig.toUi(): TargetConfig =
         wardNeeded = this.wardNeeded,
         debuffHitEnabled = this.debuffHitEnabled,
         debuffHitValue = this.debuffHitValue
-        // nouveaux champs UI-only initialisés à false par défaut
+        // debuffWoundEnabled / debuffRendEnabled / debuffAtkEnabled / debuffDmgEnabled : false par défaut (UI-only)
     )
 
 private fun com.samohammer.app.model.AttackProfile.toUi(): AttackProfile =
