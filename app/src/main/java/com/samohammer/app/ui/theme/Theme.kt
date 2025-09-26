@@ -5,6 +5,7 @@ import android.os.Build
 import androidx.compose.foundation.isSystemInDarkTheme
 import androidx.compose.material3.ColorScheme
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.Typography
 import androidx.compose.material3.darkColorScheme
 import androidx.compose.material3.lightColorScheme
 import androidx.compose.runtime.Composable
@@ -12,7 +13,9 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.toArgb
 import androidx.compose.ui.platform.LocalView
 
-// === Light scheme (vert) ===
+// ===========================
+// Palette M3 (dépend de Color.kt)
+// ===========================
 private val LightColors: ColorScheme = lightColorScheme(
     primary = GreenPrimary,
     onPrimary = Color.White,
@@ -38,7 +41,6 @@ private val LightColors: ColorScheme = lightColorScheme(
     onTertiaryContainer = OnTertiaryContainer,
 )
 
-// === Dark scheme (vert) ===
 private val DarkColors: ColorScheme = darkColorScheme(
     primary = GreenPrimaryLight,
     onPrimary = Color.Black,
@@ -64,10 +66,9 @@ private val DarkColors: ColorScheme = darkColorScheme(
     onTertiaryContainer = Color(0xFFCCF1DA),
 )
 
-/**
- * Thème SamoHammer — passe l’app en teintes de vert.
- * (Ne touche rien au moteur, uniquement couleurs.)
- */
+// ===========================
+// Thème SamoHammer (Material 3)
+// ===========================
 @Composable
 fun SamoHammerTheme(
     darkTheme: Boolean = isSystemInDarkTheme(),
@@ -75,7 +76,7 @@ fun SamoHammerTheme(
 ) {
     val colors = if (darkTheme) DarkColors else LightColors
 
-    // Optionnel: teinter status/navigation bar pour cohérence visuelle
+    // Optionnel : teinter la status/navigation bar
     val view = LocalView.current
     if (!view.isInEditMode && Build.VERSION.SDK_INT >= Build.VERSION_CODES.LOLLIPOP) {
         (view.context as? Activity)?.window?.statusBarColor = colors.primary.toArgb()
@@ -84,7 +85,8 @@ fun SamoHammerTheme(
 
     MaterialTheme(
         colorScheme = colors,
-        typography = Typography,
+        // Pas de fichier Typography.kt requis : on passe simplement une instance M3 par défaut
+        typography = Typography(),
         content = content
     )
 }
