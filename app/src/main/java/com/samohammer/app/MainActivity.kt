@@ -1,15 +1,11 @@
-// V2.2.2 — Cap ±1 Hit/Wound + debuffs Target (-1 Rend / -1 Atk / -1 Dmg / -1 Wound) BRANCHÉS
-// - Moteur :
-//   • Hit = baseToHit + clamp( (AoA?-1:0) + (+1Hit?-1:0) + (target -1Hit ? +debuffHitValue : 0), -1, +1 ), borné 2..6
-//   • Wound = baseToWound + clamp( (+1Wound?-1:0) + (target -1Wound ? +1 : 0), -1, +1 ), borné 2..6
-//   • Attacks = max(0, attacks + bonusAtk - (target -1Atk ? 1 : 0)); totalAttacks = models * Attacks
-//   • Rend = rend + (bonus +1Rend ? +1 : 0) + (target -1Rend ? -1 : 0)
-//   • Damage = max(0, damage + (bonus +1Dmg ? +1 : 0) - (target -1Dmg ? 1 : 0))
-//   • Ward comme avant (2..6); traits spéciaux inchangés (twoHits, autoW, mortal).
-// - UI :
-//   • Onglet Bonus → colonne Target : ajoute les cases -1 Rend, -1 Atk, -1 Dmg, et branche -1 Wound (désormais pris en compte par le moteur).
-//   • Onglet Profils → pop-in “Toggle Bonus” inchangée (UI-only mais maintenant tout impacte la simu).
-// - Persistance : on NE persiste pas les nouveaux toggles Target ni les bonus de la pop-in; seuls ward/debuffHit restent persistés.
+// V2.2.3 — Fix Toggle Bonus (merge UI-only vs persisté) + Cap ±1 + debuffs Target branchés
+// - Corrige la perte des bonus: au lieu de remplacer l'état par le persisté, on MERGE en conservant les champs UI-only.
+// - Pop-in Toggle Bonus: états temp réinitialisés à l’ouverture (remember(profile)).
+// - Rappels moteur (inchangés depuis 2.2.2):
+//   • Cap ±1 sur Hit/Wound par rapport au profil de base (somme des deltas puis clamp).
+//   • Debuffs Target (-1 Hit/Wound/Rend/Atk/Dmg) branchés; Ward branchée.
+//   • Bonus profil (+1 Hit/Wound/Atk/Rend/Dmg) branchés; AoA branché.
+// - Persistance: on ne persiste que units/target "de base" (AoA inclus, ward, debuffHit).
 
 package com.samohammer.app
 
@@ -51,8 +47,21 @@ class MainActivity : ComponentActivity() {
                 var target by remember { mutableStateOf(TargetConfig()) }
 
                 val persisted by appStateVM.state.collectAsState()
-                LaunchedEffect(persisted.units) { units = persisted.units.map { it.toUi() } }
-                LaunchedEffect(persisted.target) { target = persisted.target.toUi() }
+
+                // ---- MERGE plutôt que REPLACE : on garde les bonus UI-only ----
+                LaunchedEffect(persisted.units) {
+                    val incoming = persisted.units.map { it.toUi() }
+                    units = mergeUnitsKeepUiOnly(old = units, incoming = incoming)
+                }
+                LaunchedEffect(persisted.target) {
+                    val inc = persisted.target.toUi()
+                    target = target.copy(
+                        wardNeeded = inc.wardNeeded,
+                        debuffHitEnabled = inc.debuffHitEnabled,
+                        debuffHitValue = inc.debuffHitValue
+                        // on NE touche PAS aux debuffs UI-only : debuffWound/Rend/Atk/Dmg
+                    )
+                }
 
                 Scaffold(
                     topBar = {
@@ -138,6 +147,58 @@ data class TargetConfig(
     val debuffAtkEnabled: Boolean = false,   // -1 attaque (min 0)
     val debuffDmgEnabled: Boolean = false    // -1 damage (min 0)
 )
+
+/* =========================
+   MERGE helpers (conserver bonus UI-only)
+   ========================= */
+private fun mergeUnitsKeepUiOnly(
+    old: List<UnitEntry>,
+    incoming: List<UnitEntry>
+): List<UnitEntry> {
+    if (old.isEmpty()) return incoming
+    val size = max(old.size, incoming.size)
+    val out = mutableListOf<UnitEntry>()
+    for (i in 0 until size) {
+        val o = old.getOrNull(i)
+        val n = incoming.getOrNull(i)
+        when {
+            n == null && o != null -> out += o // garde l'ancien si incoming plus court
+            n != null && o == null -> out += n // nouveau élément
+            n != null && o != null -> {
+                val mergedProfiles = mergeProfilesKeepUiOnly(o.profiles, n.profiles)
+                out += n.copy(profiles = mergedProfiles) // name/active depuis persisté, bonus depuis o.profiles
+            }
+        }
+    }
+    return out
+}
+
+private fun mergeProfilesKeepUiOnly(
+    old: List<AttackProfile>,
+    incoming: List<AttackProfile>
+): List<AttackProfile> {
+    val size = max(old.size, incoming.size)
+    val out = mutableListOf<AttackProfile>()
+    for (i in 0 until size) {
+        val o = old.getOrNull(i)
+        val n = incoming.getOrNull(i)
+        when {
+            n == null && o != null -> out += o
+            n != null && o == null -> out += n
+            n != null && o != null -> {
+                // on prend les stats/base depuis 'n' (persisté) et on greffe les bonus UI-only depuis 'o'
+                out += n.copy(
+                    bonusHit = o.bonusHit,
+                    bonusWound = o.bonusWound,
+                    bonusAtk = o.bonusAtk,
+                    bonusRend = o.bonusRend,
+                    bonusDmg = o.bonusDmg
+                )
+            }
+        }
+    }
+    return out
+}
 
 /* =========================
    Moteur (AoA + Bonus + Debuffs Target + Cap ±1)
@@ -383,8 +444,6 @@ fun BonusTab(units: List<UnitEntry>, target: TargetConfig, onUpdate: (TargetConf
                                     )
                                 }
                             )
-
-                            // Debuffs Target BRANCHÉS
                             TopLabeledCheckbox(
                                 label = "-1 Wound",
                                 checked = target.debuffWoundEnabled,
@@ -691,13 +750,14 @@ private fun ProfileEditor(
             }
         }
 
-        // --- AlertDialog: Toggle Bonus (UI-only) ---
+        // --- AlertDialog: Toggle Bonus ---
         if (showBonusDialog) {
-            var tempHit by remember { mutableStateOf(profile.bonusHit) }
-            var tempWound by remember { mutableStateOf(profile.bonusWound) }
-            var tempAtk by remember { mutableStateOf(profile.bonusAtk.coerceIn(0, 2)) }
-            var tempRend by remember { mutableStateOf(profile.bonusRend) }
-            var tempDmg by remember { mutableStateOf(profile.bonusDmg) }
+            // IMPORTANT: ré-init à l’ouverture en se basant sur le profil courant
+            var tempHit by remember(profile) { mutableStateOf(profile.bonusHit) }
+            var tempWound by remember(profile) { mutableStateOf(profile.bonusWound) }
+            var tempAtk by remember(profile) { mutableStateOf(profile.bonusAtk.coerceIn(0, 2)) }
+            var tempRend by remember(profile) { mutableStateOf(profile.bonusRend) }
+            var tempDmg by remember(profile) { mutableStateOf(profile.bonusDmg) }
 
             AlertDialog(
                 onDismissRequest = { showBonusDialog = false },
@@ -892,7 +952,6 @@ private fun com.samohammer.app.model.TargetConfig.toUi(): TargetConfig =
         wardNeeded = this.wardNeeded,
         debuffHitEnabled = this.debuffHitEnabled,
         debuffHitValue = this.debuffHitValue
-        // debuffWoundEnabled / debuffRendEnabled / debuffAtkEnabled / debuffDmgEnabled : false par défaut (UI-only)
     )
 
 private fun com.samohammer.app.model.AttackProfile.toUi(): AttackProfile =
