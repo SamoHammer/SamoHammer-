@@ -2,36 +2,21 @@ package com.samohammer.app.ui.theme
 
 import androidx.compose.ui.graphics.Color
 
-/**
- * Palette claire — contraste renforcé
- * - Fond général clair
- * - Cartes hiérarchisées en nuances de gris (Unit un peu plus foncé que Weapon)
- * - Target légèrement teinté vert très pâle pour ressortir sans crier
- * - Actions (boutons, switches ON, FAB) conservent le vert
- *
- * NOTE: Les noms sont inchangés pour rester 100% compatibles avec ton Theme.kt actuel.
- */
+// Accent (vert) — on garde la même vibe qu'avant
+val Green600 = Color(0xFF2E7D32)
+val Green500 = Color(0xFF43A047) // primary
+val Green400 = Color(0xFF66BB6A) // secondary / survol
 
-// 🌑 (utilisé seulement en mode sombre par Theme.kt)
-val DarkBackground = Color(0xFF0A0F0A)
+// Palette DARK neutre (nuances de gris)
+val Black            = Color(0xFF000000)
+val DarkBg           = Color(0xFF0E0E0E) // background
+val DarkSurface      = Color(0xFF1A1A1A) // carte "Unit"
+val DarkSurfaceAlt   = Color(0xFF2A2A2A) // carte "Weapon Profile"
+val DividerGray      = Color(0xFF3A3A3A)
 
-// 🟩 Actions / Accents (conservés)
-val AccentGreen   = Color(0xFF43A047) // boutons primaires, switch ON, FAB
-val DividerGreen  = Color(0xFFE0E0E0) // lignes/outline (gris clair en thème clair)
+// Text / icon sur dark
+val OnDark           = Color(0xFFFFFFFF) // blanc lisible
+val OnDarkMuted      = Color(0xFFE6E6E6)
 
-// ✍️ Texte (thème clair)
-val TextPrimary   = Color(0xFF111111) // texte principal
-val TextSecondary = Color(0xFF616161) // labels/hints
-
-// 🧱 Surfaces (thème clair)
-val UnitCard      = Color(0xFFE9ECEA) // bloc Unit : gris très clair, un cran plus foncé
-val WeaponCard    = Color(0xFFF4F6F5) // bloc Weapon Profile : gris encore plus clair
-val TargetCard    = Color(0xFFEEF7F0) // bloc Target : gris/vert très pâle, lisible et distinct
-
-// ---------- (anciens alias non utilisés dans Theme.kt actuel, laissés pour compat éventuelle) ----------
-val Purple80      = Color(0xFFD0BCFF)
-val PurpleGrey80  = Color(0xFFCCC2DC)
-val Pink80        = Color(0xFFEFB8C8)
-val Purple40      = Color(0xFF6650A4)
-val PurpleGrey40  = Color(0xFF625B71)
-val Pink40        = Color(0xFF7D5260)
+// Sur accents
+val OnPrimaryDark    = Color(0xFF0B0B0B) // texte sur vert (légèrement off-black pour éviter l'écrasement)
