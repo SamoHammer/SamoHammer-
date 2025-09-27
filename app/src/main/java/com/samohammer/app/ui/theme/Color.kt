@@ -2,60 +2,28 @@ package com.samohammer.app.ui.theme
 
 import androidx.compose.ui.graphics.Color
 
-/**
- * Palette SamoHammer — Vert contrasté (3 niveaux nets)
- * IMPORTANT: les noms restent identiques pour ne rien casser côté Theme.kt.
- *
- * Niveaux:
- * - SurfaceRootDark: fond global quasi noir vert
- * - SurfaceCardUnit: bloc "Unit" (le plus sombre)
- * - SurfaceCardProfile: bloc "Weapon Profile" (plus clair)
- * - SurfaceCardTarget: bloc "Target" (le plus clair des trois)
- */
+// === Palette verte (Material-ish) ===
+val GreenPrimary       = Color(0xFF2E7D32)  // emerald 700
+val GreenPrimaryDark   = Color(0xFF1B5E20)  // emerald 900
+val GreenPrimaryLight  = Color(0xFF66BB6A)  // emerald 400
 
-// ---------- Accents / Brand ----------
-val GreenPrimary        = Color(0xFF2E7D32) // vert foncé (barres, éléments persistants)
-val GreenPrimaryLight   = Color(0xFF43A047) // accent plus vif (switch ON, FAB, boutons primaires)
-val GreenSecondary      = Color(0xFF1B5E20)
-val GreenSecondaryLight = Color(0xFF66BB6A)
+val GreenSecondary     = Color(0xFF00796B)  // teal 700
+val GreenSecondaryLight= Color(0xFF26A69A)  // teal 400
+val GreenSecondaryDark = Color(0xFF004D40)  // teal 900
 
-// ---------- Surfaces (fonds et cartes) ----------
-val SurfaceRootDark     = Color(0xFF0A0F0A) // fond global (écran)
-val SurfaceCardUnit     = Color(0xFF122112) // Unit : sombre désaturé
-val SurfaceCardProfile  = Color(0xFF1C331C) // Weapon Profile : plus clair et plus saturé
-val SurfaceCardTarget   = Color(0xFF274427) // Target : le plus clair → se détache bien
+// Surfaces / containers
+val SurfaceVariant         = Color(0xFFE8F3EB) // léger vert/gris
+val OnSurfaceVariant       = Color(0xFF274233)
 
-// Compat avec Theme.kt (ne pas renommer)
-val SurfaceVariant      = SurfaceCardProfile
-val TertiaryContainer   = SurfaceCardTarget
+val TertiaryContainer      = Color(0xFFDDF3E2) // pour carte Target
+val OnTertiaryContainer    = Color(0xFF1F3A2C)
 
-// ---------- Texte / Icônes ----------
-val OnSurfacePrimary    = Color(0xFFE6FFE6) // texte principal très lisible
-val OnSurfaceSecondary  = Color(0xFFA0C0A0) // labels, hints
-val OnSurfaceMuted      = Color(0xFF8BA798) // infos faibles
+val OutlineSoft            = Color(0xFFB5C9BD)
 
-// Compat Theme.kt
-val OnSurfaceVariant    = OnSurfaceSecondary
-val OnTertiaryContainer = OnSurfacePrimary
-
-// ---------- Bordures / Dividers ----------
-val OutlineSoft         = Color(0xFF2E4A33) // bordures discrètes mais visibles
-
-// ---------- Optionnels (si utilisés ailleurs) ----------
-val ErrorRed            = Color(0xFFEF5350)
-val WarningAmber        = Color(0xFFFFB300)
-val InfoBlue            = Color(0xFF64B5F6)
-val SuccessGreen        = GreenPrimaryLight
-
-// Aliases texte (si utilisés côté UI)
-val TextPrimary         = OnSurfacePrimary
-val TextSecondary       = OnSurfaceSecondary
-val TextMuted           = OnSurfaceMuted
-
-// Anciennes démos (laissées pour compat potentielle, non utilisées par Theme.kt)
-val Purple80            = Color(0xFFD0BCFF)
-val PurpleGrey80        = Color(0xFFCCC2DC)
-val Pink80              = Color(0xFFEFB8C8)
-val Purple40            = Color(0xFF6650A4)
-val PurpleGrey40        = Color(0xFF625B71)
-val Pink40              = Color(0xFF7D5260)
+// Garde tes tokens existants pour éviter les "unresolved reference" ailleurs
+object SamoTokens {
+    val ShootHeader = Color(0xFF2F6FED)
+    val MeleeHeader = Color(0xFFD05050)
+    val ShootTint   = Color(0xFFE7EFFF)
+    val MeleeTint   = Color(0xFFF9E7E7)
+}
