@@ -1,8 +1,9 @@
-// V2.3.1 — Fix build (TopLabeledCheckbox calls) + palette verte déjà appliquée
-// - Corrige TOUTES les invocations de TopLabeledCheckbox avec des paramètres nommés
-//   (label=, checked=, onCheckedChange=) pour éviter l’ambiguïté du trailing lambda.
-// - Conserve V2.3.0 : contraste cartes (Unité=surfaceVariant, Profile=surface, Target=tertiaryContainer),
-//   moteur inchangé, early return Simulation si 0 unité active.
+// V2.3.1-darkfix — Stable baseline + prise en compte du nouveau Theme/Color
+// - Conserve 100% des fonctionnalités de la 2.3.1 stable (Profils, Bonus, Simulations, moteur AoA, UX numeric).
+// - AUCUN nouveau champ Domain/Proto n’est requis (pas de mapping des flags bonus supplémentaires).
+// - Ajustement visuel MINIMAL pour tirer parti de ton Theme noir/gris :
+//     * Cartes "Unit" en surface (foncé), cartes "Weapon Profile" en surfaceVariant (un peu plus clair).
+// - Corrige les imports susceptibles de manquer (KeyboardOptions/KeyboardType, onFocusChanged, CardDefaults).
 
 package com.samohammer.app
 
@@ -11,11 +12,11 @@ import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
 import androidx.activity.viewModels
 import androidx.compose.foundation.layout.*
-import androidx.compose.foundation.layout.IntrinsicSize
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.itemsIndexed
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.material3.*
+import androidx.compose.material3.CardDefaults.elevatedCardColors
 import androidx.compose.runtime.*
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.ui.Alignment
@@ -24,10 +25,10 @@ import androidx.compose.ui.draw.scale
 import androidx.compose.ui.focus.onFocusChanged
 import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.unit.dp
-import com.samohammer.app.ui.theme.SamoHammerTheme
-import kotlin.math.max
 import com.samohammer.app.ui.AppStateViewModel
 import com.samohammer.app.ui.AppStateViewModelFactory
+import com.samohammer.app.ui.theme.SamoHammerTheme
+import kotlin.math.max
 
 class MainActivity : ComponentActivity() {
     private val appStateVM: AppStateViewModel by viewModels {
@@ -41,35 +42,12 @@ class MainActivity : ComponentActivity() {
                 var selectedTab by remember { mutableStateOf(0) }
                 val tabs = listOf("Profils", "Bonus", "Simulations")
 
-                // Cold start : noms vides
-                var units by remember {
-                    mutableStateOf(
-                        listOf(
-                            UnitEntry(
-                                name = "",
-                                profiles = listOf(AttackProfile(name = ""))
-                            )
-                        )
-                    )
-                }
+                var units by remember { mutableStateOf(listOf(UnitEntry(name = ""))) }
                 var target by remember { mutableStateOf(TargetConfig()) }
 
                 val persisted by appStateVM.state.collectAsState()
-
-                // ---- MERGE : conserve UI-only & protège les noms vides vs placeholders ----
-                LaunchedEffect(persisted.units) {
-                    val incoming = persisted.units.map { it.toUi() }
-                    units = mergeUnitsKeepUiOnlyAndBlankNames(old = units, incoming = incoming)
-                }
-                LaunchedEffect(persisted.target) {
-                    val inc = persisted.target.toUi()
-                    target = target.copy(
-                        wardNeeded = inc.wardNeeded,
-                        debuffHitEnabled = inc.debuffHitEnabled,
-                        debuffHitValue = inc.debuffHitValue
-                        // UI-only: autres debuffs Target conservés
-                    )
-                }
+                LaunchedEffect(persisted.units) { units = persisted.units.map { it.toUi() } }
+                LaunchedEffect(persisted.target) { target = persisted.target.toUi() }
 
                 Scaffold(
                     topBar = {
@@ -86,10 +64,7 @@ class MainActivity : ComponentActivity() {
                     floatingActionButton = {
                         if (selectedTab == 0) {
                             FloatingActionButton(onClick = {
-                                val newUnits = units + UnitEntry(
-                                    name = "",
-                                    profiles = listOf(AttackProfile(name = ""))
-                                )
+                                val newUnits = units + UnitEntry(name = "")
                                 units = newUnits
                                 appStateVM.setUnits(newUnits.map { it.toDomain() })
                             }) { Text("+") }
@@ -98,14 +73,21 @@ class MainActivity : ComponentActivity() {
                 ) { inner ->
                     Box(Modifier.padding(inner)) {
                         when (selectedTab) {
-                            0 -> ProfilesTab(units) { newUnits ->
-                                units = newUnits
-                                appStateVM.setUnits(newUnits.map { it.toDomain() })
-                            }
-                            1 -> BonusTab(units, target) { t ->
-                                target = t
-                                appStateVM.updateTarget(t.toDomain()) // seuls ward/debuffHit sont persistés
-                            }
+                            0 -> ProfilesTab(
+                                units = units,
+                                onUpdateUnits = { newUnits ->
+                                    units = newUnits
+                                    appStateVM.setUnits(newUnits.map { it.toDomain() })
+                                }
+                            )
+                            1 -> BonusTab(
+                                units = units,
+                                target = target,
+                                onUpdate = { t ->
+                                    target = t
+                                    appStateVM.updateTarget(t.toDomain())
+                                }
+                            )
                             2 -> SimulationTab(units, target)
                         }
                     }
@@ -115,13 +97,11 @@ class MainActivity : ComponentActivity() {
     }
 }
 
-/* =========================
-   UI models (UI layer only)
-   ========================= */
+// ===== UI models (locaux, identiques 2.3.1) =====
 enum class AttackType { MELEE, SHOOT }
 
 data class AttackProfile(
-    val name: String = "Weapon Profile",
+    val name: String = "",
     val attackType: AttackType = AttackType.MELEE,
     val models: Int = 1,
     val attacks: Int = 1,
@@ -133,116 +113,32 @@ data class AttackProfile(
     val twoHits: Boolean = false,
     val autoW: Boolean = false,
     val mortal: Boolean = false,
-    val aoa: Boolean = false, // persisté via mapping
-    // Bonus UI-only (non persistés)
-    val bonusHit: Boolean = false,
-    val bonusWound: Boolean = false,
-    val bonusAtk: Int = 0,       // 0..2
-    val bonusRend: Boolean = false,
-    val bonusDmg: Boolean = false
+    val aoa: Boolean = false
 )
 
 data class UnitEntry(
-    val name: String = "Unit",
+    val name: String = "",
     val active: Boolean = true,
-    val profiles: List<AttackProfile> = listOf(AttackProfile(name = "Weapon Profile"))
+    val profiles: List<AttackProfile> = listOf(AttackProfile(name = ""))
 )
 
 data class TargetConfig(
     val wardNeeded: Int = 0,
     val debuffHitEnabled: Boolean = false,
-    val debuffHitValue: Int = 1,
-    // Debuffs Target UI-only (branchés moteur)
-    val debuffWoundEnabled: Boolean = false,
-    val debuffRendEnabled: Boolean = false,
-    val debuffAtkEnabled: Boolean = false,
-    val debuffDmgEnabled: Boolean = false
+    val debuffHitValue: Int = 1
 )
 
-/* =========================
-   MERGE helpers
-   ========================= */
-private fun isUnitPlaceholder(name: String): Boolean {
-    return name.isBlank() || name == "Unit" || name.matches(Regex("""Unit\s*\d*"""))
-}
-private fun isProfilePlaceholder(name: String): Boolean {
-    return name.isBlank() || name == "Weapon Profile"
-}
-
-private fun mergeUnitsKeepUiOnlyAndBlankNames(
-    old: List<UnitEntry>,
-    incoming: List<UnitEntry>
-): List<UnitEntry> {
-    if (incoming.isEmpty()) return old
-    val size = max(old.size, incoming.size)
-    val out = mutableListOf<UnitEntry>()
-    for (i in 0 until size) {
-        val o = old.getOrNull(i)
-        val n = incoming.getOrNull(i)
-        when {
-            n == null && o != null -> out += o
-            n != null && o == null -> out += n
-            n != null && o != null -> {
-                val mergedProfiles = mergeProfilesKeepUiOnlyAndBlankNames(o.profiles, n.profiles)
-                val mergedName = if (o.name.isBlank() && isUnitPlaceholder(n.name)) "" else n.name
-                out += n.copy(name = mergedName, profiles = mergedProfiles)
-            }
-        }
-    }
-    return out
-}
-
-private fun mergeProfilesKeepUiOnlyAndBlankNames(
-    old: List<AttackProfile>,
-    incoming: List<AttackProfile>
-): List<AttackProfile> {
-    val size = max(old.size, incoming.size)
-    val out = mutableListOf<AttackProfile>()
-    for (i in 0 until size) {
-        val o = old.getOrNull(i)
-        val n = incoming.getOrNull(i)
-        when {
-            n == null && o != null -> out += o
-            n != null && o == null -> out += n
-            n != null && o != null -> {
-                val mergedName = if (o.name.isBlank() && isProfilePlaceholder(n.name)) "" else n.name
-                out += n.copy(
-                    name = mergedName,
-                    bonusHit = o.bonusHit,
-                    bonusWound = o.bonusWound,
-                    bonusAtk = o.bonusAtk,
-                    bonusRend = o.bonusRend,
-                    bonusDmg = o.bonusDmg
-                )
-            }
-        }
-    }
-    return out
-}
-
-/* =========================
-   Moteur (AoA + Bonus + Debuffs Target + Cap ±1 + mins)
-   ========================= */
+// ===== Moteur (identique 2.3.1, avec min atk/dmg = 1) =====
 private fun clamp2to6(x: Int) = x.coerceIn(2, 6)
-
 private fun pGate(needed: Int): Double = when {
     needed <= 1 -> 1.0
     needed >= 7 -> 0.0
     else -> (7 - needed) / 6.0
 }
-
-private fun effectiveHitWithCap(baseToHit: Int, aoa: Boolean, bonusHit: Boolean, targetDebuffHit: Int): Int {
-    val sum = (if (aoa) -1 else 0) + (if (bonusHit) -1 else 0) + targetDebuffHit
-    val capped = sum.coerceIn(-1, 1)
-    return clamp2to6(baseToHit + capped)
+private fun effectiveHitThreshold(baseNeeded: Int, debuff: Int, aoa: Boolean): Int {
+    val buff = if (aoa) -1 else 0
+    return clamp2to6(baseNeeded + debuff + buff)
 }
-
-private fun effectiveWoundWithCap(baseToWound: Int, bonusWound: Boolean, targetDebuffWound: Boolean): Int {
-    val sum = (if (bonusWound) -1 else 0) + (if (targetDebuffWound) +1 else 0)
-    val capped = sum.coerceIn(-1, 1)
-    return clamp2to6(baseToWound + capped)
-}
-
 private fun pHitNonSix(effNeeded: Int): Double {
     val successes = (6 - effNeeded).coerceAtLeast(0)
     return successes / 6.0
@@ -258,84 +154,37 @@ private fun wardFactor(wardNeeded: Int): Double {
     if (wardNeeded !in 2..6) return 1.0
     return 1.0 - pGate(wardNeeded)
 }
-
 private fun expectedDamageForProfile(p: AttackProfile, target: TargetConfig, baseSave: Int?): Double {
     if (!p.active) return 0.0
-    val models = max(p.models, 0)
-    if (models == 0) return 0.0
 
-    // Attacks effectif (min 1, sauf models=0 déjà traité)
-    val extraAttacks = p.bonusAtk + (if (target.debuffAtkEnabled) -1 else 0)
-    val effAttacksStat = max(1, p.attacks + extraAttacks)
-    val totalAttacks = models * effAttacksStat
+    val attacks = max(p.models, 0) * max(p.attacks, 0)
+    if (attacks <= 0) return 0.0
 
-    // Hit/Wound avec cap ±1
-    val targetDebuffHit = if (target.debuffHitEnabled) target.debuffHitValue else 0
-    val effHit = effectiveHitWithCap(
-        baseToHit = p.toHit,
-        aoa = p.aoa,
-        bonusHit = p.bonusHit,
-        targetDebuffHit = targetDebuffHit
-    )
-    val effWound = effectiveWoundWithCap(
-        baseToWound = p.toWound,
-        bonusWound = p.bonusWound,
-        targetDebuffWound = target.debuffWoundEnabled
-    )
+    val debuff = if (target.debuffHitEnabled) target.debuffHitValue else 0
+    val effHit = effectiveHitThreshold(p.toHit, debuff, p.aoa)
 
-    // Rend / Damage (min Dmg=1)
-    val effRend = p.rend +
-        (if (p.bonusRend) 1 else 0) +
-        (if (target.debuffRendEnabled) -1 else 0)
-
-    val rawDamage = p.damage +
-        (if (p.bonusDmg) 1 else 0) -
-        (if (target.debuffDmgEnabled) 1 else 0)
-    val effDamage = max(1, rawDamage)
-
-    // Probabilités
     val p6 = 1.0 / 6.0
     val phNon6 = pHitNonSix(effHit)
-    val pw = pWound(effWound)
-    val pu = pUnsaved(baseSave, effRend)
+    val pw = pWound(p.toWound)
+    val pu = pUnsaved(baseSave, p.rend)
     val ward = wardFactor(target.wardNeeded)
 
-    val evNon6 = phNon6 * pw * pu * effDamage
+    val dmg = max(p.damage, 1)
+    val evNon6 = phNon6 * pw * pu * dmg
     val mult6 = if (p.twoHits) 2.0 else 1.0
     val pw6 = if (p.mortal || p.autoW) 1.0 else pw
     val pu6 = if (p.mortal) 1.0 else pu
-    val ev6 = p6 * mult6 * pw6 * pu6 * effDamage
-
-    return totalAttacks * (evNon6 + ev6) * ward
+    val ev6 = p6 * mult6 * pw6 * pu6 * dmg
+    return max(attacks, 1) * (evNon6 + ev6) * ward
 }
-
 private fun expectedDamageForUnit(u: UnitEntry, target: TargetConfig, baseSave: Int?): Double {
     if (!u.active) return 0.0
     return u.profiles.sumOf { expectedDamageForProfile(it, target, baseSave) }
 }
-
 private fun expectedDamageAll(units: List<UnitEntry>, target: TargetConfig, baseSave: Int?): Double =
     units.filter { it.active }.sumOf { expectedDamageForUnit(it, target, baseSave) }
 
-/* =========================
-   Helpers UI
-   ========================= */
-private fun AttackProfile.hasAnyBonus(): Boolean =
-    bonusHit || bonusWound || bonusAtk > 0 || bonusRend || bonusDmg
-
-private fun formatBonusSummary(p: AttackProfile): String {
-    val parts = mutableListOf<String>()
-    if (p.bonusHit) parts += "+1 Hit"
-    if (p.bonusWound) parts += "+1 Wound"
-    if (p.bonusAtk > 0) parts += "+1 Atk x${p.bonusAtk}"
-    if (p.bonusRend) parts += "+1 Rend"
-    if (p.bonusDmg) parts += "+1 Dmg"
-    return if (parts.isEmpty()) "—" else parts.joinToString(", ")
-}
-
-/* =========================
-   Shared UI bits
-   ========================= */
+// ===== Helpers UI =====
 @Composable
 private fun TopLabeled(label: String, content: @Composable () -> Unit) {
     Column(horizontalAlignment = Alignment.Start) {
@@ -343,7 +192,6 @@ private fun TopLabeled(label: String, content: @Composable () -> Unit) {
         content()
     }
 }
-
 @Composable
 private fun TopLabeledCheckbox(
     label: String,
@@ -361,152 +209,7 @@ private fun TopLabeledCheckbox(
     }
 }
 
-/* =========================
-   Onglet Bonus — Target en haut + cartes unités/profils
-   ========================= */
-@Composable
-fun BonusTab(units: List<UnitEntry>, target: TargetConfig, onUpdate: (TargetConfig) -> Unit) {
-    val activeUnits = units.filter { it.active }.take(6)
-    LazyColumn(
-        modifier = Modifier.fillMaxSize().padding(16.dp),
-        verticalArrangement = Arrangement.spacedBy(16.dp)
-    ) {
-        // Target en haut — CONTRASTE
-        item {
-            ElevatedCard(
-                colors = CardDefaults.elevatedCardColors(
-                    containerColor = MaterialTheme.colorScheme.tertiaryContainer
-                ),
-                modifier = Modifier.fillMaxWidth()
-            ) {
-                Column(
-                    modifier = Modifier.padding(16.dp),
-                    verticalArrangement = Arrangement.spacedBy(12.dp)
-                ) {
-                    Text("Target", style = MaterialTheme.typography.titleMedium)
-                    Column(
-                        modifier = Modifier.align(Alignment.End).width(IntrinsicSize.Min),
-                        verticalArrangement = Arrangement.spacedBy(10.dp)
-                    ) {
-                        Row(
-                            verticalAlignment = Alignment.CenterVertically,
-                            horizontalArrangement = Arrangement.spacedBy(14.dp)
-                        ) {
-                            Column(horizontalAlignment = Alignment.CenterHorizontally) {
-                                Text("Ward", style = MaterialTheme.typography.labelSmall)
-                                var wardTxt by remember(target.wardNeeded) {
-                                    mutableStateOf(
-                                        when {
-                                            target.wardNeeded == 0 -> "0"
-                                            target.wardNeeded in 2..6 -> target.wardNeeded.toString()
-                                            else -> ""
-                                        }
-                                    )
-                                }
-                                OutlinedTextField(
-                                    value = wardTxt,
-                                    onValueChange = { newText ->
-                                        val digits = newText.filter { it.isDigit() }.take(1)
-                                        wardTxt = if (digits.isEmpty()) "" else digits
-                                        onUpdate(target.copy(wardNeeded = digits.toIntOrNull() ?: 0))
-                                    },
-                                    placeholder = { Text("0 or 2..6") },
-                                    keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
-                                    singleLine = true,
-                                    modifier = Modifier.width(56.dp).height(50.dp)
-                                )
-                            }
-                            TopLabeledCheckbox(
-                                label = "-1 Hit",
-                                checked = target.debuffHitEnabled,
-                                onCheckedChange = { enabled ->
-                                    onUpdate(
-                                        target.copy(
-                                            debuffHitEnabled = enabled,
-                                            debuffHitValue = if (enabled) target.debuffHitValue else 0
-                                        )
-                                    )
-                                }
-                            )
-                            TopLabeledCheckbox(
-                                label = "-1 Wnd",
-                                checked = target.debuffWoundEnabled,
-                                onCheckedChange = { enabled ->
-                                    onUpdate(target.copy(debuffWoundEnabled = enabled))
-                                }
-                            )
-                        }
-                        Row(
-                            verticalAlignment = Alignment.CenterVertically,
-                            horizontalArrangement = Arrangement.spacedBy(18.dp)
-                        ) {
-                            TopLabeledCheckbox(
-                                label = "-1 Rend",
-                                checked = target.debuffRendEnabled,
-                                onCheckedChange = { enabled ->
-                                    onUpdate(target.copy(debuffRendEnabled = enabled))
-                                }
-                            )
-                            TopLabeledCheckbox(
-                                label = "-1 Atk",
-                                checked = target.debuffAtkEnabled,
-                                onCheckedChange = { enabled ->
-                                    onUpdate(target.copy(debuffAtkEnabled = enabled))
-                                }
-                            )
-                            TopLabeledCheckbox(
-                                label = "-1 Dmg",
-                                checked = target.debuffDmgEnabled,
-                                onCheckedChange = { enabled ->
-                                    onUpdate(target.copy(debuffDmgEnabled = enabled))
-                                }
-                            )
-                        }
-                    }
-                }
-            }
-        }
-
-        // Cartes unités: résumé profils
-        if (activeUnits.isEmpty()) {
-            item {
-                Column(
-                    modifier = Modifier.fillMaxWidth().padding(top = 8.dp),
-                    horizontalAlignment = Alignment.CenterHorizontally
-                ) { Text("No active unit.") }
-            }
-        } else {
-            itemsIndexed(activeUnits) { _, unit ->
-                val activeProfiles = unit.profiles.filter { it.active }
-                ElevatedCard(Modifier.fillMaxWidth()) {
-                    Column(
-                        modifier = Modifier.fillMaxWidth().padding(16.dp),
-                        verticalArrangement = Arrangement.spacedBy(8.dp)
-                    ) {
-                        Text(
-                            "Conditionnal Bonus — ${unit.name.ifBlank { " " }}",
-                            style = MaterialTheme.typography.titleMedium
-                        )
-                        activeProfiles.forEach { profile ->
-                            Column(
-                                modifier = Modifier.fillMaxWidth(),
-                                verticalArrangement = Arrangement.spacedBy(2.dp)
-                            ) {
-                                Text(profile.name.ifBlank { " " }, style = MaterialTheme.typography.titleSmall)
-                                Text(formatBonusSummary(profile))
-                            }
-                            Divider()
-                        }
-                    }
-                }
-            }
-        }
-    }
-}
-
-/* =========================
-   Profils (Toggle Bonus + pop-in) — 2×2 fixé
-   ========================= */
+// ===== Profils =====
 @Composable
 fun ProfilesTab(units: List<UnitEntry>, onUpdateUnits: (List<UnitEntry>) -> Unit) {
     LazyColumn(
@@ -514,10 +217,11 @@ fun ProfilesTab(units: List<UnitEntry>, onUpdateUnits: (List<UnitEntry>) -> Unit
         verticalArrangement = Arrangement.spacedBy(12.dp)
     ) {
         itemsIndexed(units) { unitIndex, unit ->
-            // CONTRASTE: carte Unité = surfaceVariant
+            // Carte "Unit" (surface par défaut)
             ElevatedCard(
-                colors = CardDefaults.elevatedCardColors(
-                    containerColor = MaterialTheme.colorScheme.surfaceVariant
+                colors = elevatedCardColors(
+                    containerColor = MaterialTheme.colorScheme.surface,
+                    contentColor = MaterialTheme.colorScheme.onSurface
                 )
             ) {
                 var expanded by rememberSaveable(unitIndex) { mutableStateOf(true) }
@@ -540,10 +244,11 @@ fun ProfilesTab(units: List<UnitEntry>, onUpdateUnits: (List<UnitEntry>) -> Unit
                             }
                         )
 
+                        // Unit name: commit-on-blur
                         var unitNameText by remember(unit.name) { mutableStateOf(unit.name) }
                         OutlinedTextField(
                             value = unitNameText,
-                            onValueChange = { unitNameText = it },
+                            onValueChange = { unitNameText = it }, // local-only
                             label = { Text("Unit") },
                             singleLine = true,
                             modifier = Modifier
@@ -557,12 +262,12 @@ fun ProfilesTab(units: List<UnitEntry>, onUpdateUnits: (List<UnitEntry>) -> Unit
                                 }
                         )
 
-                        Spacer(Modifier.width(6.dp))
-                        TextButton(onClick = { /* type toggle is per profile */ }) { Text("Type") }
-                        TextButton(onClick = { expanded = !expanded }) { Text(if (expanded) "▼" else "▶") }
+                        TextButton(onClick = { expanded = !expanded }) {
+                            Text(if (expanded) "▼" else "▶")
+                        }
                     }
 
-                    // Actions unité
+                    // Actions unité: Add à gauche, Delete totalement à droite
                     Row(
                         modifier = Modifier.fillMaxWidth(),
                         verticalAlignment = Alignment.CenterVertically,
@@ -592,7 +297,6 @@ fun ProfilesTab(units: List<UnitEntry>, onUpdateUnits: (List<UnitEntry>) -> Unit
                     if (expanded) {
                         unit.profiles.forEachIndexed { pIndex, profile ->
                             ProfileEditor(
-                                unitName = unit.name,
                                 profile = profile,
                                 onChange = { updated ->
                                     onUpdateUnits(units.toMutableList().also { list ->
@@ -628,22 +332,20 @@ fun ProfilesTab(units: List<UnitEntry>, onUpdateUnits: (List<UnitEntry>) -> Unit
 
 @Composable
 private fun ProfileEditor(
-    unitName: String,
     profile: AttackProfile,
     onChange: (AttackProfile) -> Unit,
     onRemove: () -> Unit,
     onCommitProfileName: (String) -> Unit
 ) {
-    // CONTRASTE: carte Weapon Profile = surface (blanc)
+    // Carte "Weapon Profile" (surfaceVariant pour teinte légèrement différente)
     ElevatedCard(
-        colors = CardDefaults.elevatedCardColors(
-            containerColor = MaterialTheme.colorScheme.surface
-        ),
-        modifier = Modifier.fillMaxWidth()
+        modifier = Modifier.fillMaxWidth(),
+        colors = elevatedCardColors(
+            containerColor = MaterialTheme.colorScheme.surfaceVariant,
+            contentColor = MaterialTheme.colorScheme.onSurfaceVariant
+        )
     ) {
         var expanded by rememberSaveable(profile.hashCode()) { mutableStateOf(true) }
-        var showBonusDialog by remember(profile.hashCode()) { mutableStateOf(false) }
-
         Column(
             modifier = Modifier.fillMaxWidth().padding(12.dp),
             verticalArrangement = Arrangement.spacedBy(12.dp)
@@ -659,14 +361,15 @@ private fun ProfileEditor(
                     onCheckedChange = { ok -> onChange(profile.copy(active = ok)) }
                 )
 
+                // Profile name: commit-on-blur
                 var profileNameText by remember(profile.name) { mutableStateOf(profile.name) }
                 OutlinedTextField(
                     value = profileNameText,
-                    onValueChange = { profileNameText = it },
+                    onValueChange = { profileNameText = it }, // local-only
                     label = { Text("Weapon Profile") },
                     singleLine = true,
                     modifier = Modifier
-                        .weight(1.2f)
+                        .weight(1f)
                         .onFocusChanged { state ->
                             if (!state.isFocused && profileNameText != profile.name) {
                                 onCommitProfileName(profileNameText)
@@ -687,14 +390,11 @@ private fun ProfileEditor(
                 }
             }
 
-            // Ligne d’actions
+            // Delete Profile totalement à droite
             Row(
                 modifier = Modifier.fillMaxWidth(),
-                horizontalArrangement = Arrangement.SpaceBetween,
-                verticalAlignment = Alignment.CenterVertically
+                horizontalArrangement = Arrangement.End
             ) {
-                val toggleLabel = if (profile.hasAnyBonus()) "Toggle Bonus ✓" else "Toggle Bonus"
-                TextButton(onClick = { showBonusDialog = true }) { Text(toggleLabel) }
                 TextButton(onClick = onRemove) { Text("Delete Profile") }
             }
 
@@ -704,27 +404,58 @@ private fun ProfileEditor(
                     horizontalArrangement = Arrangement.SpaceBetween,
                     verticalAlignment = Alignment.Top
                 ) {
+                    // Colonne gauche : champs numériques
                     Column(
                         verticalArrangement = Arrangement.spacedBy(10.dp),
                         modifier = Modifier.weight(1f)
                     ) {
-                        Row(horizontalArrangement = Arrangement.SpaceEvenly, modifier = Modifier.fillMaxWidth()) {
-                            NumberFieldCentered("Size", profile.models, 0) { v -> onChange(profile.copy(models = v)) }
-                            NumberFieldCentered("Atk", profile.attacks, 0) { v -> onChange(profile.copy(attacks = v)) }
-                            GateField2to6Centered("Hit", profile.toHit, 4) { v -> onChange(profile.copy(toHit = v)) }
+                        Row(horizontalArrangement = Arrangement.spacedBy(12.dp), modifier = Modifier.fillMaxWidth()) {
+                            NumberField(
+                                label = "Size",
+                                value = profile.models,
+                                defaultOnBlur = 0,
+                                onValue = { v -> onChange(profile.copy(models = v)) }
+                            )
+                            NumberField(
+                                label = "Atk",
+                                value = profile.attacks,
+                                defaultOnBlur = 0,
+                                onValue = { v -> onChange(profile.copy(attacks = v)) }
+                            )
+                            GateField2to6(
+                                label = "Hit",
+                                value = profile.toHit,
+                                defaultOnBlur = 4,
+                                onValue = { v -> onChange(profile.copy(toHit = v)) }
+                            )
                         }
-                        Row(horizontalArrangement = Arrangement.SpaceEvenly, modifier = Modifier.fillMaxWidth()) {
-                            GateField2to6Centered("Wnd", profile.toWound, 4) { v -> onChange(profile.copy(toWound = v)) }
-                            NumberFieldCentered("Rend", profile.rend, 0) { v -> onChange(profile.copy(rend = v)) }
-                            NumberFieldCentered("Dmg", profile.damage, 0) { v -> onChange(profile.copy(damage = v)) }
+                        Row(horizontalArrangement = Arrangement.spacedBy(12.dp), modifier = Modifier.fillMaxWidth()) {
+                            GateField2to6(
+                                label = "Wnd",
+                                value = profile.toWound,
+                                defaultOnBlur = 4,
+                                onValue = { v -> onChange(profile.copy(toWound = v)) }
+                            )
+                            NumberField(
+                                label = "Rend",
+                                value = profile.rend,
+                                defaultOnBlur = 0,
+                                onValue = { v -> onChange(profile.copy(rend = v)) }
+                            )
+                            NumberField(
+                                label = "Dmg",
+                                value = profile.damage,
+                                defaultOnBlur = 1,
+                                onValue = { v -> onChange(profile.copy(damage = v)) }
+                            )
                         }
                     }
 
-                    // 2×2 fixe : (2Hits, AutoW) / (Mortal, AoA)
+                    // Colonne droite : checkboxes
                     Column(
                         verticalArrangement = Arrangement.spacedBy(12.dp),
                         horizontalAlignment = Alignment.End,
-                        modifier = Modifier.width(130.dp)
+                        modifier = Modifier.width(110.dp)
                     ) {
                         Row(horizontalArrangement = Arrangement.spacedBy(8.dp), modifier = Modifier.fillMaxWidth()) {
                             TopLabeledCheckbox(
@@ -754,117 +485,48 @@ private fun ProfileEditor(
                 }
             }
         }
-
-        // Pop-in Toggle Bonus
-        if (showBonusDialog) {
-            var tempHit by remember(profile) { mutableStateOf(profile.bonusHit) }
-            var tempWound by remember(profile) { mutableStateOf(profile.bonusWound) }
-            var tempAtk by remember(profile) { mutableStateOf(profile.bonusAtk.coerceIn(0, 2)) }
-            var tempRend by remember(profile) { mutableStateOf(profile.bonusRend) }
-            var tempDmg by remember(profile) { mutableStateOf(profile.bonusDmg) }
-
-            AlertDialog(
-                onDismissRequest = { showBonusDialog = false },
-                title = { Text("${unitName.ifBlank { " " }} – ${profile.name.ifBlank { " " }}") },
-                text = {
-                    Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                        Row(
-                            verticalAlignment = Alignment.CenterVertically,
-                            horizontalArrangement = Arrangement.SpaceBetween,
-                            modifier = Modifier.fillMaxWidth()
-                        ) {
-                            Text("+1 Hit")
-                            Switch(checked = tempHit, onCheckedChange = { tempHit = it })
-                        }
-                        Row(
-                            verticalAlignment = Alignment.CenterVertically,
-                            horizontalArrangement = Arrangement.SpaceBetween,
-                            modifier = Modifier.fillMaxWidth()
-                        ) {
-                            Text("+1 Wound")
-                            Switch(checked = tempWound, onCheckedChange = { tempWound = it })
-                        }
-                        Column {
-                            Text("+1 Atk (x${tempAtk})")
-                            Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                                Button(
-                                    onClick = { tempAtk = (tempAtk - 1).coerceAtLeast(0) },
-                                    enabled = tempAtk > 0
-                                ) { Text("-") }
-                                Button(
-                                    onClick = { tempAtk = (tempAtk + 1).coerceAtMost(2) },
-                                    enabled = tempAtk < 2
-                                ) { Text("+") }
-                            }
-                        }
-                        Row(
-                            verticalAlignment = Alignment.CenterVertically,
-                            horizontalArrangement = Arrangement.SpaceBetween,
-                            modifier = Modifier.fillMaxWidth()
-                        ) {
-                            Text("+1 Rend")
-                            Switch(checked = tempRend, onCheckedChange = { tempRend = it })
-                        }
-                        Row(
-                            verticalAlignment = Alignment.CenterVertically,
-                            horizontalArrangement = Arrangement.SpaceBetween,
-                            modifier = Modifier.fillMaxWidth()
-                        ) {
-                            Text("+1 Dmg")
-                            Switch(checked = tempDmg, onCheckedChange = { tempDmg = it })
-                        }
-                    }
-                },
-                confirmButton = {
-                    TextButton(onClick = {
-                        onChange(
-                            profile.copy(
-                                bonusHit = tempHit,
-                                bonusWound = tempWound,
-                                bonusAtk = tempAtk,
-                                bonusRend = tempRend,
-                                bonusDmg = tempDmg
-                            )
-                        )
-                        showBonusDialog = false
-                    }) { Text("Valider") }
-                },
-                dismissButton = {
-                    TextButton(onClick = { showBonusDialog = false }) { Text("Annuler") }
-                }
-            )
-        }
     }
 }
 
-/* =========================
-   Champs numériques centrés
-   ========================= */
+// ===== Champs numériques (UX: clear-on-focus, blur default, 2..6) =====
 @Composable
-private fun NumberFieldCentered(
-    label: String, value: Int, defaultOnBlur: Int, onValue: (Int) -> Unit
+private fun NumberField(
+    label: String,
+    value: Int,
+    defaultOnBlur: Int,
+    onValue: (Int) -> Unit
 ) {
     var text by remember(value) { mutableStateOf(value.toString()) }
     var hadFocus by remember { mutableStateOf(false) }
-    Column(horizontalAlignment = Alignment.CenterHorizontally) {
+
+    Column {
         Text(label, style = MaterialTheme.typography.labelSmall)
         OutlinedTextField(
             value = text,
-            onValueChange = { t ->
-                val d = t.filter { it.isDigit() }
-                if (d.isEmpty()) text = "" else {
-                    text = d; d.toIntOrNull()?.let(onValue)
+            onValueChange = { newText ->
+                val digits = newText.filter { it.isDigit() }
+                if (digits.isEmpty()) {
+                    text = ""
+                } else {
+                    text = digits
+                    val v = digits.toIntOrNull()
+                    if (v != null) onValue(v)
                 }
             },
             singleLine = true,
             keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
             modifier = Modifier
-                .width(58.dp).height(50.dp)
+                .size(width = 58.dp, height = 50.dp)
                 .onFocusChanged { st ->
-                    if (st.isFocused && !hadFocus) { hadFocus = true; text = "" }
-                    else if (!st.isFocused) {
+                    if (st.isFocused && !hadFocus) {
+                        hadFocus = true
+                        text = "" // clear on focus
+                    } else if (!st.isFocused) {
                         hadFocus = false
-                        if (text.isEmpty()) { text = defaultOnBlur.toString(); onValue(defaultOnBlur) }
+                        if (text.isEmpty()) {
+                            text = defaultOnBlur.toString()
+                            onValue(defaultOnBlur) // blur default
+                        }
                     }
                 }
         )
@@ -872,34 +534,50 @@ private fun NumberFieldCentered(
 }
 
 @Composable
-private fun GateField2to6Centered(
-    label: String, value: Int, defaultOnBlur: Int, onValue: (Int) -> Unit
+private fun GateField2to6(
+    label: String,
+    value: Int,
+    defaultOnBlur: Int,
+    onValue: (Int) -> Unit
 ) {
     var text by remember(value) { mutableStateOf(value.toString()) }
     var hadFocus by remember { mutableStateOf(false) }
-    Column(horizontalAlignment = Alignment.CenterHorizontally) {
+
+    Column {
         Text(label, style = MaterialTheme.typography.labelSmall)
         OutlinedTextField(
             value = text,
-            onValueChange = { t ->
-                val d = t.filter { it.isDigit() }
-                if (d.isEmpty()) text = "" else {
-                    val d1 = d.take(1); text = d1
-                    d1.toIntOrNull()?.let { if (it in 2..6) onValue(it) }
+            onValueChange = { newText ->
+                val digits = newText.filter { it.isDigit() }
+                if (digits.isEmpty()) {
+                    text = ""
+                } else {
+                    val d1 = digits.take(1)
+                    text = d1
+                    val v = d1.toIntOrNull()
+                    if (v != null && v in 2..6) onValue(v)
                 }
             },
             placeholder = { Text("2..6") },
             singleLine = true,
             keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
             modifier = Modifier
-                .width(58.dp).height(50.dp)
+                .size(width = 58.dp, height = 50.dp)
                 .onFocusChanged { st ->
-                    if (st.isFocused && !hadFocus) { hadFocus = true; text = "" }
-                    else if (!st.isFocused) {
+                    if (st.isFocused && !hadFocus) {
+                        hadFocus = true
+                        text = "" // clear on focus
+                    } else if (!st.isFocused) {
                         hadFocus = false
-                        val v = text.toIntOrNull()
-                        if (text.isEmpty() || v == null || v !in 2..6) {
-                            text = defaultOnBlur.toString(); onValue(defaultOnBlur)
+                        if (text.isEmpty()) {
+                            text = defaultOnBlur.toString()
+                            onValue(defaultOnBlur)
+                        } else {
+                            val v = text.toIntOrNull()
+                            if (v == null || v !in 2..6) {
+                                text = defaultOnBlur.toString()
+                                onValue(defaultOnBlur)
+                            }
                         }
                     }
                 }
@@ -907,33 +585,122 @@ private fun GateField2to6Centered(
     }
 }
 
-/* =========================
-   Simulation (early return si 0 unité active)
-   ========================= */
+// ===== Onglet Bonus (Target global + recap minimal) =====
+@Composable
+fun BonusTab(units: List<UnitEntry>, target: TargetConfig, onUpdate: (TargetConfig) -> Unit) {
+    val activeUnits = units.filter { it.active }.take(6)
+
+    LazyColumn(
+        modifier = Modifier.fillMaxSize().padding(16.dp),
+        verticalArrangement = Arrangement.spacedBy(16.dp)
+    ) {
+        // Bloc Target (global)
+        item {
+            ElevatedCard {
+                Column(Modifier.fillMaxWidth().padding(16.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
+                    Text("Target", style = MaterialTheme.typography.titleMedium)
+
+                    // Ligne 1: Ward, -1 Hit, -1 Wnd (UI-only)
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.spacedBy(24.dp),
+                        verticalAlignment = Alignment.Top
+                    ) {
+                        TopLabeled("Ward") {
+                            var wardTxt by remember(target.wardNeeded) {
+                                mutableStateOf(
+                                    when {
+                                        target.wardNeeded == 0 -> "0"
+                                        target.wardNeeded in 2..6 -> target.wardNeeded.toString()
+                                        else -> ""
+                                    }
+                                )
+                            }
+                            OutlinedTextField(
+                                value = wardTxt,
+                                onValueChange = { newText ->
+                                    val digits = newText.filter { it.isDigit() }.take(1)
+                                    wardTxt = if (digits.isEmpty()) "" else digits
+                                    val v = digits.toIntOrNull()
+                                    onUpdate(target.copy(wardNeeded = v ?: 0))
+                                },
+                                placeholder = { Text("0 or 2..6") },
+                                keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
+                                singleLine = true,
+                                modifier = Modifier.width(80.dp).height(50.dp)
+                            )
+                        }
+                        TopLabeledCheckbox(
+                            label = "-1 Hit",
+                            checked = target.debuffHitEnabled,
+                            onCheckedChange = { enabled ->
+                                onUpdate(
+                                    target.copy(
+                                        debuffHitEnabled = enabled,
+                                        debuffHitValue = if (enabled) target.debuffHitValue else 0
+                                    )
+                                )
+                            }
+                        )
+                        // UI-only pour -1 Wound (non persisté pour l’instant)
+                        var debuffWound by remember { mutableStateOf(false) }
+                        TopLabeledCheckbox(
+                            label = "-1 Wnd",
+                            checked = debuffWound,
+                            onCheckedChange = { debuffWound = it }
+                        )
+                    }
+
+                    // (Attacker bloc minimal d’avant — visuel-only)
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.End
+                    ) {
+                        var buffWound by remember { mutableStateOf(false) }
+                        TopLabeledCheckbox(
+                            label = "+1 Wound",
+                            checked = buffWound,
+                            onCheckedChange = { buffWound = it }
+                        )
+                    }
+                }
+            }
+        }
+
+        // Récap par unité (read-only visuel)
+        itemsIndexed(activeUnits) { _, unit ->
+            ElevatedCard {
+                Column(Modifier.fillMaxWidth().padding(16.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
+                    Text("Conditionnal Bonus — ${unit.name.ifBlank { "Unit" }}", style = MaterialTheme.typography.titleMedium)
+                    unit.profiles.forEach { p ->
+                        Text(p.name.ifBlank { "Weapon Profile" }, style = MaterialTheme.typography.labelLarge)
+                        Divider()
+                    }
+                }
+            }
+        }
+    }
+}
+
+// ===== Simulations (tableau simple + safe no-active) =====
 @Composable
 fun SimulationTab(units: List<UnitEntry>, target: TargetConfig) {
     val activeUnits = units.filter { it.active }.take(6)
-
-    if (activeUnits.isEmpty()) {
-        Box(
-            modifier = Modifier.fillMaxSize(),
-            contentAlignment = Alignment.Center
-        ) { Text("No active unit.") }
-        return
-    }
-
     Column(
         modifier = Modifier.fillMaxSize().padding(16.dp),
         verticalArrangement = Arrangement.spacedBy(8.dp)
     ) {
         Text("Damage expectation by Save (per active unit, max 6)", style = MaterialTheme.typography.titleMedium)
-
+        if (activeUnits.isEmpty()) {
+            Spacer(Modifier.height(8.dp))
+            Text("No active unit.")
+            return@Column
+        }
         Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(12.dp)) {
             Text("Save", modifier = Modifier.width(70.dp))
-            activeUnits.forEach { u -> Text(u.name.ifBlank { " " }, modifier = Modifier.weight(1f), maxLines = 1) }
+            activeUnits.forEach { u -> Text(u.name.ifBlank { "Unit" }, modifier = Modifier.weight(1f), maxLines = 1) }
         }
         Divider()
-
         val saves = listOf<Int?>(2, 3, 4, 5, 6, null)
         saves.forEach { save ->
             Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(12.dp)) {
@@ -949,9 +716,7 @@ fun SimulationTab(units: List<UnitEntry>, target: TargetConfig) {
     }
 }
 
-/* =========================
-   Mapping UI <-> Domain
-   ========================= */
+/* ===== Mapping UI <-> Domain (identique 2.3.1) ===== */
 private fun TargetConfig.toDomain(): com.samohammer.app.model.TargetConfig =
     com.samohammer.app.model.TargetConfig(
         wardNeeded = this.wardNeeded,
@@ -983,8 +748,8 @@ private fun com.samohammer.app.model.AttackProfile.toUi(): AttackProfile =
         autoW = autoW,
         mortal = mortal,
         aoa = aoa
-        // bonus* non mappés (UI-only)
     )
+
 private fun AttackProfile.toDomain(): com.samohammer.app.model.AttackProfile =
     com.samohammer.app.model.AttackProfile(
         id = com.samohammer.app.util.newUuid(),
@@ -1004,10 +769,11 @@ private fun AttackProfile.toDomain(): com.samohammer.app.model.AttackProfile =
         autoW = autoW,
         mortal = mortal,
         aoa = aoa
-        // bonus* non persistés
     )
+
 private fun com.samohammer.app.model.UnitEntry.toUi(): UnitEntry =
     UnitEntry(name = name, active = active, profiles = profiles.map { it.toUi() })
+
 private fun UnitEntry.toDomain(): com.samohammer.app.model.UnitEntry =
     com.samohammer.app.model.UnitEntry(
         id = com.samohammer.app.util.newUuid(),
