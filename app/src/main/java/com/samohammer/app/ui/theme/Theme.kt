@@ -1,55 +1,50 @@
 package com.samohammer.app.ui.theme
 
-import androidx.compose.material3.ColorScheme
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.darkColorScheme
-import androidx.compose.material3.Shapes
-import androidx.compose.material3.Typography
+import androidx.compose.material3.lightColorScheme
 import androidx.compose.runtime.Composable
 
-// --- ColorScheme DARK: fond noir + surfaces gris, texte blanc.
-// Primary/Secondary en vert pour les accents (FAB, checkboxes, boutons).
-private val SamoDarkColorScheme: ColorScheme = darkColorScheme(
-    // Accents
-    primary = Green500,
-    onPrimary = OnPrimaryDark,
-    secondary = Green400,
-    onSecondary = OnPrimaryDark,
-    tertiary = Green600,
-    onTertiary = OnPrimaryDark,
+// Schémas Material3 stricts (aucun appel à une API non standard)
+private val DarkColors = darkColorScheme(
+    primary = SamoGreen,
+    onPrimary = SamoOnGreen,
+    primaryContainer = SamoGreenContainer,
+    onPrimaryContainer = SamoOnGreenContainer,
 
-    // Fond & surfaces
-    background = DarkBg,
-    onBackground = OnDark,
-    surface = DarkSurface,          // par défaut: cartes "Unit"
-    onSurface = OnDark,
+    surface = SamoSurfaceDark,
+    onSurface = SamoOnSurfaceDark,
+    surfaceVariant = SamoSurfaceVariantDark,
+    onSurfaceVariant = SamoOnSurfaceVariantDark,
 
-    // Surfaces alternatives (utilisées via surfaceVariant / onSurfaceVariant)
-    surfaceVariant = DarkSurfaceAlt, // cartes "Weapon Profile"
-    onSurfaceVariant = OnDark,
-
-    // Autres (dialog, menus, etc.)
-    outline = DividerGray,
-    outlineVariant = DividerGray,
-
-    // Erreur (garde par défaut M3)
-    error = androidx.compose.material3.ColorScheme.defaults.error,
-    onError = androidx.compose.material3.ColorScheme.defaults.onError
+    secondary = SamoSecondary,
+    onSecondary = SamoOnSecondary,
 )
 
-// Garder la typo & shapes M3 par défaut (déjà nickel pour notre use).
-private val SamoTypography = Typography()
-private val SamoShapes = Shapes()
+private val LightColors = lightColorScheme(
+    primary = SamoGreen,
+    onPrimary = SamoOnGreen,
+    primaryContainer = SamoGreenContainer,
+    onPrimaryContainer = SamoOnGreenContainer,
+
+    surface = SamoSurfaceLight,
+    onSurface = SamoOnSurfaceLight,
+    surfaceVariant = SamoSurfaceVariantLight,
+    onSurfaceVariant = SamoOnSurfaceVariantLight,
+
+    secondary = SamoSecondary,
+    onSecondary = SamoOnSecondary,
+)
 
 @Composable
 fun SamoHammerTheme(
+    darkTheme: Boolean = true, // on reste en mode sombre par défaut
     content: @Composable () -> Unit
 ) {
-    // On force le thème dark (pas de dynamic color pour garder un rendu stable).
+    val colors = if (darkTheme) DarkColors else LightColors
     MaterialTheme(
-        colorScheme = SamoDarkColorScheme,
-        typography = SamoTypography,
-        shapes = SamoShapes,
+        colorScheme = colors,
+        // Pas de Typography/Shapes custom → on laisse les défauts de Material3
         content = content
     )
 }
